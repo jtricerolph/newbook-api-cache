@@ -109,33 +109,25 @@ class NewBook_Cache_Admin_Settings {
                 </a>
             </h2>
 
-            <form method="post" action="options.php">
-                <?php settings_fields('newbook_cache_settings'); ?>
-
-                <?php
-                switch ($active_tab) {
-                    case 'credentials':
-                        $this->render_credentials_tab();
-                        break;
-                    case 'cache':
-                        $this->render_cache_tab($stats);
-                        break;
-                    case 'logs':
-                        $this->render_logs_tab();
-                        break;
-                    case 'api-access':
-                        $this->render_api_access_tab();
-                        break;
-                    case 'api-docs':
-                        $this->render_api_docs_tab();
-                        break;
-                }
-                ?>
-
-                <?php if (!in_array($active_tab, array('logs', 'api-access', 'api-docs'))): ?>
-                    <?php submit_button(); ?>
-                <?php endif; ?>
-            </form>
+            <?php
+            switch ($active_tab) {
+                case 'credentials':
+                    $this->render_credentials_tab();
+                    break;
+                case 'cache':
+                    $this->render_cache_tab($stats);
+                    break;
+                case 'logs':
+                    $this->render_logs_tab();
+                    break;
+                case 'api-access':
+                    $this->render_api_access_tab();
+                    break;
+                case 'api-docs':
+                    $this->render_api_docs_tab();
+                    break;
+            }
+            ?>
         </div>
         <?php
     }
@@ -229,40 +221,45 @@ class NewBook_Cache_Admin_Settings {
         }
         ?>
 
-        <table class="form-table">
-            <tr>
-                <th scope="row"><?php _e('NewBook Username', 'newbook-api-cache'); ?></th>
-                <td>
-                    <input type="text" name="newbook_cache_username" value="<?php echo esc_attr($username); ?>" class="regular-text" />
-                    <p class="description"><?php _e('Your NewBook API username', 'newbook-api-cache'); ?></p>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row"><?php _e('NewBook Password', 'newbook-api-cache'); ?></th>
-                <td>
-                    <input type="password" name="newbook_cache_password" value="<?php echo esc_attr($password); ?>" class="regular-text" />
-                    <p class="description"><?php _e('Your NewBook API password', 'newbook-api-cache'); ?></p>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row"><?php _e('NewBook API Key', 'newbook-api-cache'); ?></th>
-                <td>
-                    <input type="text" name="newbook_cache_api_key" value="<?php echo esc_attr($api_key); ?>" class="regular-text" />
-                    <p class="description"><?php _e('Your NewBook API key', 'newbook-api-cache'); ?></p>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row"><?php _e('Region', 'newbook-api-cache'); ?></th>
-                <td>
-                    <select name="newbook_cache_region">
-                        <option value="au" <?php selected($region, 'au'); ?>>Australia (au)</option>
-                        <option value="nz" <?php selected($region, 'nz'); ?>>New Zealand (nz)</option>
-                        <option value="eu" <?php selected($region, 'eu'); ?>>Europe (eu)</option>
-                        <option value="us" <?php selected($region, 'us'); ?>>United States (us)</option>
-                    </select>
-                </td>
-            </tr>
-        </table>
+        <form method="post" action="options.php">
+            <?php settings_fields('newbook_cache_settings'); ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php _e('NewBook Username', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <input type="text" name="newbook_cache_username" value="<?php echo esc_attr($username); ?>" class="regular-text" />
+                        <p class="description"><?php _e('Your NewBook API username', 'newbook-api-cache'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('NewBook Password', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <input type="password" name="newbook_cache_password" value="<?php echo esc_attr($password); ?>" class="regular-text" />
+                        <p class="description"><?php _e('Your NewBook API password', 'newbook-api-cache'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('NewBook API Key', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <input type="text" name="newbook_cache_api_key" value="<?php echo esc_attr($api_key); ?>" class="regular-text" />
+                        <p class="description"><?php _e('Your NewBook API key', 'newbook-api-cache'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Region', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <select name="newbook_cache_region">
+                            <option value="au" <?php selected($region, 'au'); ?>>Australia (au)</option>
+                            <option value="nz" <?php selected($region, 'nz'); ?>>New Zealand (nz)</option>
+                            <option value="eu" <?php selected($region, 'eu'); ?>>Europe (eu)</option>
+                            <option value="us" <?php selected($region, 'us'); ?>>United States (us)</option>
+                        </select>
+                    </td>
+                </tr>
+            </table>
+
+            <?php submit_button(); ?>
+        </form>
 
         <p>
             <a href="<?php echo admin_url('admin-post.php?action=newbook_cache_test_connection'); ?>" class="button">
@@ -287,60 +284,65 @@ class NewBook_Cache_Admin_Settings {
         $last_cleanup = get_option('newbook_cache_last_cleanup', 'Never');
 
         ?>
-        <table class="form-table">
-            <tr>
-                <th scope="row"><?php _e('Enable Caching', 'newbook-api-cache'); ?></th>
-                <td>
-                    <label>
-                        <input type="checkbox" name="newbook_cache_enabled" value="1" <?php checked($enabled, true); ?> />
-                        <?php _e('Enable NewBook API caching', 'newbook-api-cache'); ?>
-                    </label>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row"><?php _e('Unknown API Actions', 'newbook-api-cache'); ?></th>
-                <td>
-                    <label>
-                        <input type="checkbox" name="newbook_cache_allow_unknown_relay" value="1" <?php checked($allow_unknown_relay, true); ?> />
-                        <?php _e('Allow relaying unknown API actions to NewBook', 'newbook-api-cache'); ?>
-                    </label>
-                    <p class="description">
-                        <?php _e('<strong>Security Notice:</strong> By default, only known read-only actions (bookings_list, bookings_get, sites_list) are processed.', 'newbook-api-cache'); ?>
-                        <br />
-                        <?php _e('When disabled (recommended), unknown actions will be blocked and logged.', 'newbook-api-cache'); ?>
-                        <br />
-                        <?php _e('Only enable this if you need to relay other NewBook API actions through this plugin.', 'newbook-api-cache'); ?>
-                    </p>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row"><?php _e('Retention Periods', 'newbook-api-cache'); ?></th>
-                <td>
-                    <p>
+        <form method="post" action="options.php">
+            <?php settings_fields('newbook_cache_settings'); ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php _e('Enable Caching', 'newbook-api-cache'); ?></th>
+                    <td>
                         <label>
-                            <?php _e('Future bookings:', 'newbook-api-cache'); ?>
-                            <input type="number" name="newbook_cache_retention_future" value="<?php echo esc_attr($retention_future); ?>" min="30" max="730" class="small-text" />
-                            <?php _e('days', 'newbook-api-cache'); ?>
+                            <input type="checkbox" name="newbook_cache_enabled" value="1" <?php checked($enabled, true); ?> />
+                            <?php _e('Enable NewBook API caching', 'newbook-api-cache'); ?>
                         </label>
-                    </p>
-                    <p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Unknown API Actions', 'newbook-api-cache'); ?></th>
+                    <td>
                         <label>
-                            <?php _e('Past bookings:', 'newbook-api-cache'); ?>
-                            <input type="number" name="newbook_cache_retention_past" value="<?php echo esc_attr($retention_past); ?>" min="1" max="365" class="small-text" />
-                            <?php _e('days', 'newbook-api-cache'); ?>
+                            <input type="checkbox" name="newbook_cache_allow_unknown_relay" value="1" <?php checked($allow_unknown_relay, true); ?> />
+                            <?php _e('Allow relaying unknown API actions to NewBook', 'newbook-api-cache'); ?>
                         </label>
-                    </p>
-                    <p>
-                        <label>
-                            <?php _e('Cancelled bookings:', 'newbook-api-cache'); ?>
-                            <input type="number" name="newbook_cache_retention_cancelled" value="<?php echo esc_attr($retention_cancelled); ?>" min="1" max="365" class="small-text" />
-                            <?php _e('days', 'newbook-api-cache'); ?>
-                        </label>
-                    </p>
-                    <p class="description"><?php _e('How long to keep bookings in cache', 'newbook-api-cache'); ?></p>
-                </td>
-            </tr>
-        </table>
+                        <p class="description">
+                            <?php _e('<strong>Security Notice:</strong> By default, only known read-only actions (bookings_list, bookings_get, sites_list) are processed.', 'newbook-api-cache'); ?>
+                            <br />
+                            <?php _e('When disabled (recommended), unknown actions will be blocked and logged.', 'newbook-api-cache'); ?>
+                            <br />
+                            <?php _e('Only enable this if you need to relay other NewBook API actions through this plugin.', 'newbook-api-cache'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Retention Periods', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <p>
+                            <label>
+                                <?php _e('Future bookings:', 'newbook-api-cache'); ?>
+                                <input type="number" name="newbook_cache_retention_future" value="<?php echo esc_attr($retention_future); ?>" min="30" max="730" class="small-text" />
+                                <?php _e('days', 'newbook-api-cache'); ?>
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <?php _e('Past bookings:', 'newbook-api-cache'); ?>
+                                <input type="number" name="newbook_cache_retention_past" value="<?php echo esc_attr($retention_past); ?>" min="1" max="365" class="small-text" />
+                                <?php _e('days', 'newbook-api-cache'); ?>
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <?php _e('Cancelled bookings:', 'newbook-api-cache'); ?>
+                                <input type="number" name="newbook_cache_retention_cancelled" value="<?php echo esc_attr($retention_cancelled); ?>" min="1" max="365" class="small-text" />
+                                <?php _e('days', 'newbook-api-cache'); ?>
+                            </label>
+                        </p>
+                        <p class="description"><?php _e('How long to keep bookings in cache', 'newbook-api-cache'); ?></p>
+                    </td>
+                </tr>
+            </table>
+
+            <?php submit_button(); ?>
+        </form>
 
         <h3><?php _e('Cache Statistics', 'newbook-api-cache'); ?></h3>
         <table class="widefat">
@@ -402,60 +404,63 @@ class NewBook_Cache_Admin_Settings {
         $log_count = NewBook_Cache_Logger::get_log_count();
 
         ?>
-        <h3><?php _e('Logging Settings', 'newbook-api-cache'); ?></h3>
-        <table class="form-table">
-            <tr>
-                <th scope="row"><?php _e('Log Level', 'newbook-api-cache'); ?></th>
-                <td>
-                    <select name="newbook_cache_log_level">
-                        <option value="<?php echo NewBook_Cache_Logger::OFF; ?>" <?php selected($log_level, NewBook_Cache_Logger::OFF); ?>><?php _e('Off', 'newbook-api-cache'); ?></option>
-                        <option value="<?php echo NewBook_Cache_Logger::ERROR; ?>" <?php selected($log_level, NewBook_Cache_Logger::ERROR); ?>><?php _e('Error', 'newbook-api-cache'); ?></option>
-                        <option value="<?php echo NewBook_Cache_Logger::INFO; ?>" <?php selected($log_level, NewBook_Cache_Logger::INFO); ?>><?php _e('Info', 'newbook-api-cache'); ?></option>
-                        <option value="<?php echo NewBook_Cache_Logger::DEBUG; ?>" <?php selected($log_level, NewBook_Cache_Logger::DEBUG); ?>><?php _e('Debug', 'newbook-api-cache'); ?></option>
-                    </select>
-                    <p class="description"><?php _e('Control logging verbosity. Debug logs the most detail.', 'newbook-api-cache'); ?></p>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row"><?php _e('Max Log Entries', 'newbook-api-cache'); ?></th>
-                <td>
-                    <input type="number" name="newbook_cache_max_logs" value="<?php echo esc_attr($max_logs); ?>" min="100" max="10000" class="small-text" />
-                    <p class="description"><?php _e('Maximum number of log entries to keep in database', 'newbook-api-cache'); ?></p>
-                </td>
-            </tr>
-        </table>
+        <form method="post" action="options.php">
+            <?php settings_fields('newbook_cache_settings'); ?>
+            <h3><?php _e('Logging Settings', 'newbook-api-cache'); ?></h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php _e('Log Level', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <select name="newbook_cache_log_level">
+                            <option value="<?php echo NewBook_Cache_Logger::OFF; ?>" <?php selected($log_level, NewBook_Cache_Logger::OFF); ?>><?php _e('Off', 'newbook-api-cache'); ?></option>
+                            <option value="<?php echo NewBook_Cache_Logger::ERROR; ?>" <?php selected($log_level, NewBook_Cache_Logger::ERROR); ?>><?php _e('Error', 'newbook-api-cache'); ?></option>
+                            <option value="<?php echo NewBook_Cache_Logger::INFO; ?>" <?php selected($log_level, NewBook_Cache_Logger::INFO); ?>><?php _e('Info', 'newbook-api-cache'); ?></option>
+                            <option value="<?php echo NewBook_Cache_Logger::DEBUG; ?>" <?php selected($log_level, NewBook_Cache_Logger::DEBUG); ?>><?php _e('Debug', 'newbook-api-cache'); ?></option>
+                        </select>
+                        <p class="description"><?php _e('Control logging verbosity. Debug logs the most detail.', 'newbook-api-cache'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Max Log Entries', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <input type="number" name="newbook_cache_max_logs" value="<?php echo esc_attr($max_logs); ?>" min="100" max="10000" class="small-text" />
+                        <p class="description"><?php _e('Maximum number of log entries to keep in database', 'newbook-api-cache'); ?></p>
+                    </td>
+                </tr>
+            </table>
 
-        <h3><?php _e('Privacy & GDPR Compliance', 'newbook-api-cache'); ?></h3>
-        <table class="form-table">
-            <tr>
-                <th scope="row"><?php _e('Anonymize IP Addresses', 'newbook-api-cache'); ?></th>
-                <td>
-                    <label>
-                        <input type="checkbox" name="newbook_cache_anonymize_ips" value="1" <?php checked($anonymize_ips, true); ?> />
-                        <?php _e('Remove last octet from IP addresses in logs', 'newbook-api-cache'); ?>
-                    </label>
-                    <p class="description">
-                        <?php _e('When enabled, IP addresses like 192.168.1.123 become 192.168.1.0 for privacy compliance (GDPR).', 'newbook-api-cache'); ?>
-                        <br />
-                        <strong><?php _e('Recommended:', 'newbook-api-cache'); ?></strong> <?php _e('Enable this to minimize personal data collection while maintaining security monitoring.', 'newbook-api-cache'); ?>
-                    </p>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row"><?php _e('Log Retention Period', 'newbook-api-cache'); ?></th>
-                <td>
-                    <input type="number" name="newbook_cache_log_retention_days" value="<?php echo esc_attr($log_retention_days); ?>" min="1" max="365" class="small-text" />
-                    <?php _e('days', 'newbook-api-cache'); ?>
-                    <p class="description">
-                        <?php _e('Automatically delete logs older than this many days (1-365).', 'newbook-api-cache'); ?>
-                        <br />
-                        <strong><?php _e('Note:', 'newbook-api-cache'); ?></strong> <?php _e('Shorter retention periods reduce data storage and privacy risk. Recommended: 30 days.', 'newbook-api-cache'); ?>
-                    </p>
-                </td>
-            </tr>
-        </table>
+            <h3><?php _e('Privacy & GDPR Compliance', 'newbook-api-cache'); ?></h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php _e('Anonymize IP Addresses', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="newbook_cache_anonymize_ips" value="1" <?php checked($anonymize_ips, true); ?> />
+                            <?php _e('Remove last octet from IP addresses in logs', 'newbook-api-cache'); ?>
+                        </label>
+                        <p class="description">
+                            <?php _e('When enabled, IP addresses like 192.168.1.123 become 192.168.1.0 for privacy compliance (GDPR).', 'newbook-api-cache'); ?>
+                            <br />
+                            <strong><?php _e('Recommended:', 'newbook-api-cache'); ?></strong> <?php _e('Enable this to minimize personal data collection while maintaining security monitoring.', 'newbook-api-cache'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Log Retention Period', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <input type="number" name="newbook_cache_log_retention_days" value="<?php echo esc_attr($log_retention_days); ?>" min="1" max="365" class="small-text" />
+                        <?php _e('days', 'newbook-api-cache'); ?>
+                        <p class="description">
+                            <?php _e('Automatically delete logs older than this many days (1-365).', 'newbook-api-cache'); ?>
+                            <br />
+                            <strong><?php _e('Note:', 'newbook-api-cache'); ?></strong> <?php _e('Shorter retention periods reduce data storage and privacy risk. Recommended: 30 days.', 'newbook-api-cache'); ?>
+                        </p>
+                    </td>
+                </tr>
+            </table>
 
-        <?php submit_button(); ?>
+            <?php submit_button(); ?>
+        </form>
 
         <h3><?php echo sprintf(__('Recent Log Entries (%d total)', 'newbook-api-cache'), $log_count); ?></h3>
 
