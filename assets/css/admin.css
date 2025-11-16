@@ -1,0 +1,40 @@
+/* NewBook API Cache Admin Styles */
+
+.log-level {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.log-level-error {
+    background: #dc3232;
+    color: #fff;
+}
+
+.log-level-info {
+    background: #0073aa;
+    color: #fff;
+}
+
+.log-level-debug {
+    background: #999;
+    color: #fff;
+}
+
+.newbook-cache-stats {
+    background: #f5f5f5;
+    padding: 15px;
+    margin: 15px 0;
+    border-left: 4px solid #0073aa;
+}
+
+.newbook-cache-stats table {
+    width: 100%;
+}
+
+.newbook-cache-stats td {
+    padding: 5px 0;
+}

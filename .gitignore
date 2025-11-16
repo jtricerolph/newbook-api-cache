@@ -1,0 +1,26 @@
+# WordPress
+wp-config.php
+*.log
+
+# Credentials (NEVER commit)
+*credentials*
+*password*
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+logs/
+debug.log
