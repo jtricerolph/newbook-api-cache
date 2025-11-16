@@ -563,14 +563,22 @@ class NewBook_Cache_Admin_Settings {
                 <?php else: ?>
                     <?php foreach ($logs as $log): ?>
                         <tr>
-                            <td><?php echo esc_html($log->timestamp); ?></td>
+                            <td style="white-space: nowrap;"><?php echo esc_html($log->timestamp); ?></td>
                             <td>
                                 <span class="log-level log-level-<?php echo esc_attr(strtolower(NewBook_Cache_Logger::get_level_name($log->level))); ?>">
                                     <?php echo esc_html(NewBook_Cache_Logger::get_level_name($log->level)); ?>
                                 </span>
                             </td>
-                            <td><?php echo esc_html($log->message); ?></td>
-                            <td><?php echo esc_html($log->memory_usage); ?></td>
+                            <td>
+                                <?php echo esc_html($log->message); ?>
+                                <?php if (!empty($log->context)): ?>
+                                    <details style="margin-top: 5px;">
+                                        <summary style="cursor: pointer; font-size: 11px; color: #666;"><?php _e('Show Details', 'newbook-api-cache'); ?></summary>
+                                        <pre style="margin-top: 5px; padding: 8px; background: #f9f9f9; overflow-x: auto; font-size: 11px; max-height: 300px;"><?php echo esc_html(json_encode(json_decode($log->context), JSON_PRETTY_PRINT)); ?></pre>
+                                    </details>
+                                <?php endif; ?>
+                            </td>
+                            <td style="white-space: nowrap;"><?php echo esc_html($log->memory_usage); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
