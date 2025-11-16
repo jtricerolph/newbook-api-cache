@@ -25,6 +25,7 @@ class NewBook_Cache_Admin_Settings {
         add_action('admin_post_newbook_cache_clear_logs', array($this, 'handle_clear_logs'));
         add_action('admin_post_newbook_cache_generate_api_key', array($this, 'handle_generate_api_key'));
         add_action('admin_post_newbook_cache_revoke_api_key', array($this, 'handle_revoke_api_key'));
+        add_action('admin_post_newbook_cache_test_connection', array($this, 'handle_test_connection'));
     }
 
     /**
@@ -150,7 +151,86 @@ class NewBook_Cache_Admin_Settings {
         $api_key = get_option('newbook_cache_api_key');
         $region = get_option('newbook_cache_region', 'au');
 
+        // Display test connection results
+        if (isset($_GET['test_result'])) {
+            $test_result = sanitize_text_field($_GET['test_result']);
+
+            switch ($test_result) {
+                case 'success':
+                    $response_time = isset($_GET['response_time']) ? absint($_GET['response_time']) : 0;
+                    $test_region = isset($_GET['region']) ? sanitize_text_field($_GET['region']) : $region;
+                    ?>
+                    <div class="notice notice-success is-dismissible">
+                        <p>
+                            <strong><?php _e('Connection Successful!', 'newbook-api-cache'); ?></strong>
+                        </p>
+                        <p>
+                            <?php _e('Your NewBook API credentials are valid and working correctly.', 'newbook-api-cache'); ?>
+                        </p>
+                        <ul>
+                            <li><strong><?php _e('Region:', 'newbook-api-cache'); ?></strong> <?php echo esc_html(strtoupper($test_region)); ?></li>
+                            <li><strong><?php _e('Response Time:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($response_time); ?>ms</li>
+                            <li><strong><?php _e('Endpoint:', 'newbook-api-cache'); ?></strong> https://api.newbook.cloud/rest/sites_list</li>
+                        </ul>
+                    </div>
+                    <?php
+                    break;
+
+                case 'missing_credentials':
+                    ?>
+                    <div class="notice notice-error is-dismissible">
+                        <p>
+                            <strong><?php _e('Missing Credentials', 'newbook-api-cache'); ?></strong>
+                        </p>
+                        <p><?php _e('Please configure all required fields (Username, Password, and API Key) before testing the connection.', 'newbook-api-cache'); ?></p>
+                    </div>
+                    <?php
+                    break;
+
+                case 'auth_failed':
+                    $status_code = isset($_GET['status_code']) ? absint($_GET['status_code']) : 401;
+                    ?>
+                    <div class="notice notice-error is-dismissible">
+                        <p>
+                            <strong><?php _e('Authentication Failed', 'newbook-api-cache'); ?></strong>
+                        </p>
+                        <p><?php _e('The NewBook API rejected your credentials. Please check your Username and Password are correct.', 'newbook-api-cache'); ?></p>
+                        <p><strong><?php _e('HTTP Status:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($status_code); ?></p>
+                    </div>
+                    <?php
+                    break;
+
+                case 'api_error':
+                    $status_code = isset($_GET['status_code']) ? absint($_GET['status_code']) : 0;
+                    $error_msg = isset($_GET['test_error']) ? urldecode(sanitize_text_field($_GET['test_error'])) : 'Unknown error';
+                    ?>
+                    <div class="notice notice-error is-dismissible">
+                        <p>
+                            <strong><?php _e('API Error', 'newbook-api-cache'); ?></strong>
+                        </p>
+                        <p><?php _e('The NewBook API returned an error. This may indicate an incorrect API Key or Region setting.', 'newbook-api-cache'); ?></p>
+                        <p><strong><?php _e('HTTP Status:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($status_code); ?></p>
+                        <p><strong><?php _e('Error Message:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($error_msg); ?></p>
+                    </div>
+                    <?php
+                    break;
+
+                case 'error':
+                    $error_msg = isset($_GET['test_error']) ? urldecode(sanitize_text_field($_GET['test_error'])) : 'Unknown error';
+                    ?>
+                    <div class="notice notice-error is-dismissible">
+                        <p>
+                            <strong><?php _e('Connection Error', 'newbook-api-cache'); ?></strong>
+                        </p>
+                        <p><?php _e('Failed to connect to the NewBook API. This may be a network issue.', 'newbook-api-cache'); ?></p>
+                        <p><strong><?php _e('Error:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($error_msg); ?></p>
+                    </div>
+                    <?php
+                    break;
+            }
+        }
         ?>
+
         <table class="form-table">
             <tr>
                 <th scope="row"><?php _e('NewBook Username', 'newbook-api-cache'); ?></th>
@@ -796,6 +876,115 @@ class NewBook_Cache_Admin_Settings {
             'message' => 'key_revoked'
         ), admin_url('options-general.php')));
         exit;
+    }
+
+    /**
+     * Handle test connection action
+     */
+    public function handle_test_connection() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Unauthorized', 'newbook-api-cache'));
+        }
+
+        // Get credentials from settings
+        $username = get_option('newbook_cache_username');
+        $password = get_option('newbook_cache_password');
+        $api_key = get_option('newbook_cache_api_key');
+        $region = get_option('newbook_cache_region', 'au');
+
+        // Validate credentials are configured
+        if (empty($username) || empty($password) || empty($api_key)) {
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'credentials',
+                'test_result' => 'missing_credentials'
+            ), admin_url('options-general.php')));
+            exit;
+        }
+
+        // Build API URL (use live endpoint)
+        $base_url = 'https://api.newbook.cloud/rest/';
+        $action = 'sites_list'; // Lightweight endpoint for testing
+        $url = $base_url . $action;
+
+        // Build request body
+        $body = json_encode(array(
+            'region' => $region,
+            'api_key' => $api_key
+        ));
+
+        // Make test request
+        $start_time = microtime(true);
+        $response = wp_remote_post($url, array(
+            'timeout' => 15,
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Basic ' . base64_encode($username . ':' . $password)
+            ),
+            'body' => $body,
+            'sslverify' => true
+        ));
+        $response_time = round((microtime(true) - $start_time) * 1000); // Convert to ms
+
+        // Check for errors
+        if (is_wp_error($response)) {
+            $error_message = $response->get_error_message();
+            NewBook_Cache_Logger::log('Test connection failed: ' . $error_message, NewBook_Cache_Logger::ERROR);
+
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'credentials',
+                'test_result' => 'error',
+                'test_error' => urlencode($error_message)
+            ), admin_url('options-general.php')));
+            exit;
+        }
+
+        // Check response code
+        $status_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+        $data = json_decode($response_body, true);
+
+        // Log the test result
+        NewBook_Cache_Logger::log('Test connection completed', NewBook_Cache_Logger::INFO, array(
+            'status_code' => $status_code,
+            'response_time_ms' => $response_time,
+            'region' => $region,
+            'success' => ($status_code === 200 && isset($data['success']) && $data['success'])
+        ));
+
+        // Check if successful
+        if ($status_code === 200 && isset($data['success']) && $data['success']) {
+            // Success!
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'credentials',
+                'test_result' => 'success',
+                'response_time' => $response_time,
+                'region' => $region
+            ), admin_url('options-general.php')));
+            exit;
+        } elseif ($status_code === 401) {
+            // Authentication failed
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'credentials',
+                'test_result' => 'auth_failed',
+                'status_code' => $status_code
+            ), admin_url('options-general.php')));
+            exit;
+        } else {
+            // Other error
+            $error_msg = isset($data['message']) ? $data['message'] : 'Unknown error';
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'credentials',
+                'test_result' => 'api_error',
+                'status_code' => $status_code,
+                'test_error' => urlencode($error_msg)
+            ), admin_url('options-general.php')));
+            exit;
+        }
     }
 
     /**
