@@ -190,6 +190,33 @@ class NewBook_Cache_Admin_Settings {
                     <?php
                     break;
 
+                case 'precondition_failed':
+                    $status_code = isset($_GET['status_code']) ? absint($_GET['status_code']) : 412;
+                    $error_msg = isset($_GET['test_error']) ? urldecode(sanitize_text_field($_GET['test_error'])) : 'Precondition failed';
+                    $test_region = isset($_GET['region']) ? sanitize_text_field($_GET['region']) : $region;
+                    ?>
+                    <div class="notice notice-error is-dismissible">
+                        <p>
+                            <strong><?php _e('Region/API Key Mismatch', 'newbook-api-cache'); ?></strong>
+                        </p>
+                        <p><?php _e('The NewBook API returned HTTP 412 (Precondition Failed). This typically means:', 'newbook-api-cache'); ?></p>
+                        <ul style="margin-left: 20px;">
+                            <li><?php _e('Your API Key does not match the selected Region', 'newbook-api-cache'); ?></li>
+                            <li><?php _e('The API Key is for a different NewBook region than you selected', 'newbook-api-cache'); ?></li>
+                            <li><?php _e('Your account doesn\'t have access to this region', 'newbook-api-cache'); ?></li>
+                        </ul>
+                        <p>
+                            <strong><?php _e('Current Region:', 'newbook-api-cache'); ?></strong> <?php echo esc_html(strtoupper($test_region)); ?>
+                            <br>
+                            <strong><?php _e('Suggestion:', 'newbook-api-cache'); ?></strong>
+                            <?php _e('Try changing the Region setting to match where your NewBook account is located (Australia, New Zealand, Europe, or United States).', 'newbook-api-cache'); ?>
+                        </p>
+                        <p><strong><?php _e('HTTP Status:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($status_code); ?></p>
+                        <p><strong><?php _e('API Response:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($error_msg); ?></p>
+                    </div>
+                    <?php
+                    break;
+
                 case 'api_error':
                     $status_code = isset($_GET['status_code']) ? absint($_GET['status_code']) : 0;
                     $error_msg = isset($_GET['test_error']) ? urldecode(sanitize_text_field($_GET['test_error'])) : 'Unknown error';
@@ -1018,9 +1045,30 @@ class NewBook_Cache_Admin_Settings {
                 'status_code' => $status_code
             ), admin_url('options-general.php')));
             exit;
+        } elseif ($status_code === 412) {
+            // Precondition Failed - usually region/API key mismatch
+            $error_msg = isset($data['message']) ? $data['message'] : 'Precondition failed - check region and API key match';
+            NewBook_Cache_Logger::log('Test connection HTTP 412: Region/API key mismatch', NewBook_Cache_Logger::WARNING, array(
+                'status_code' => $status_code,
+                'region' => $region,
+                'response_body' => $response_body
+            ));
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'credentials',
+                'test_result' => 'precondition_failed',
+                'status_code' => $status_code,
+                'region' => $region,
+                'test_error' => urlencode($error_msg)
+            ), admin_url('options-general.php')));
+            exit;
         } else {
             // Other error
             $error_msg = isset($data['message']) ? $data['message'] : 'Unknown error';
+            NewBook_Cache_Logger::log('Test connection failed', NewBook_Cache_Logger::WARNING, array(
+                'status_code' => $status_code,
+                'response_body' => $response_body
+            ));
             wp_redirect(add_query_arg(array(
                 'page' => 'newbook-cache-settings',
                 'tab' => 'credentials',
