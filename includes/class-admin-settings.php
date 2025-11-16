@@ -23,6 +23,8 @@ class NewBook_Cache_Admin_Settings {
         add_action('admin_post_newbook_cache_clear_cache', array($this, 'handle_clear_cache'));
         add_action('admin_post_newbook_cache_full_refresh', array($this, 'handle_full_refresh'));
         add_action('admin_post_newbook_cache_clear_logs', array($this, 'handle_clear_logs'));
+        add_action('admin_post_newbook_cache_generate_api_key', array($this, 'handle_generate_api_key'));
+        add_action('admin_post_newbook_cache_revoke_api_key', array($this, 'handle_revoke_api_key'));
     }
 
     /**
@@ -99,6 +101,12 @@ class NewBook_Cache_Admin_Settings {
                 <a href="?page=newbook-cache-settings&tab=logs" class="nav-tab <?php echo $active_tab === 'logs' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('Logging & Debug', 'newbook-api-cache'); ?>
                 </a>
+                <a href="?page=newbook-cache-settings&tab=api-access" class="nav-tab <?php echo $active_tab === 'api-access' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('API Access', 'newbook-api-cache'); ?>
+                </a>
+                <a href="?page=newbook-cache-settings&tab=api-docs" class="nav-tab <?php echo $active_tab === 'api-docs' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('API Documentation', 'newbook-api-cache'); ?>
+                </a>
             </h2>
 
             <form method="post" action="options.php">
@@ -115,10 +123,16 @@ class NewBook_Cache_Admin_Settings {
                     case 'logs':
                         $this->render_logs_tab();
                         break;
+                    case 'api-access':
+                        $this->render_api_access_tab();
+                        break;
+                    case 'api-docs':
+                        $this->render_api_docs_tab();
+                        break;
                 }
                 ?>
 
-                <?php if ($active_tab !== 'logs'): ?>
+                <?php if (!in_array($active_tab, array('logs', 'api-access', 'api-docs'))): ?>
                     <?php submit_button(); ?>
                 <?php endif; ?>
             </form>
@@ -162,10 +176,10 @@ class NewBook_Cache_Admin_Settings {
                 <th scope="row"><?php _e('Region', 'newbook-api-cache'); ?></th>
                 <td>
                     <select name="newbook_cache_region">
-                        <option value="au" <?php selected($region, 'au'); ?>>Australia</option>
-                        <option value="nz" <?php selected($region, 'nz'); ?>>New Zealand</option>
-                        <option value="uk" <?php selected($region, 'uk'); ?>>United Kingdom</option>
-                        <option value="us" <?php selected($region, 'us'); ?>>United States</option>
+                        <option value="au" <?php selected($region, 'au'); ?>>Australia (au)</option>
+                        <option value="nz" <?php selected($region, 'nz'); ?>>New Zealand (nz)</option>
+                        <option value="eu" <?php selected($region, 'eu'); ?>>Europe (eu)</option>
+                        <option value="us" <?php selected($region, 'us'); ?>>United States (us)</option>
                     </select>
                 </td>
             </tr>
@@ -437,6 +451,332 @@ class NewBook_Cache_Admin_Settings {
         NewBook_Cache_Logger::clear_logs();
 
         wp_redirect(add_query_arg(array('page' => 'newbook-cache-settings', 'tab' => 'logs', 'message' => 'logs_cleared'), admin_url('options-general.php')));
+        exit;
+    }
+
+    /**
+     * Render API Access tab
+     */
+    private function render_api_access_tab() {
+        $api_keys = NewBook_API_Key_Manager::get_all_keys(true);
+        $api_key_stats = NewBook_API_Key_Manager::get_stats();
+
+        ?>
+        <h3><?php _e('API Access Management', 'newbook-api-cache'); ?></h3>
+        <p><?php _e('Manage API keys for external systems to access cached NewBook data. These keys can be used by Chrome extensions, PWA apps, EPOS systems, and other integrations.', 'newbook-api-cache'); ?></p>
+
+        <div class="card">
+            <h3><?php _e('Authentication Methods', 'newbook-api-cache'); ?></h3>
+            <p><?php _e('This plugin supports two authentication methods for REST API access:', 'newbook-api-cache'); ?></p>
+
+            <h4>1. <?php _e('WordPress Application Passwords', 'newbook-api-cache'); ?></h4>
+            <p><?php _e('Use your WordPress username and an application-specific password. Generate these in your WordPress profile.', 'newbook-api-cache'); ?></p>
+            <pre>curl -u username:app_password https://yoursite.com/wp-json/newbook-cache/v1/bookings/list</pre>
+
+            <h4>2. <?php _e('Custom API Keys', 'newbook-api-cache'); ?></h4>
+            <p><?php _e('Generate dedicated API keys below for external systems. Each key can be labeled, tracked, and revoked independently.', 'newbook-api-cache'); ?></p>
+            <pre>curl -H "Authorization: Bearer nbcache_..." https://yoursite.com/wp-json/newbook-cache/v1/bookings/list</pre>
+        </div>
+
+        <h3><?php _e('API Keys', 'newbook-api-cache'); ?></h3>
+
+        <p>
+            <strong><?php _e('Total Active Keys:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($api_key_stats['total_active_keys']); ?>
+            &nbsp;|&nbsp;
+            <strong><?php _e('Total API Usage:', 'newbook-api-cache'); ?></strong> <?php echo number_format($api_key_stats['total_usage']); ?>
+            &nbsp;|&nbsp;
+            <strong><?php _e('Last Used:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($api_key_stats['last_used'] ?: 'Never'); ?>
+        </p>
+
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th><?php _e('Label', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Created', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Last Used', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Usage Count', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Actions', 'newbook-api-cache'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($api_keys)): ?>
+                    <tr>
+                        <td colspan="5"><?php _e('No API keys found. Generate your first key below.', 'newbook-api-cache'); ?></td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($api_keys as $key): ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($key->key_label); ?></strong></td>
+                            <td><?php echo esc_html($this->time_ago($key->created_date)); ?></td>
+                            <td><?php echo esc_html($key->last_used ? $this->time_ago($key->last_used) : 'Never'); ?></td>
+                            <td><?php echo number_format($key->usage_count); ?></td>
+                            <td>
+                                <a href="<?php echo wp_nonce_url(admin_url('admin-post.php?action=newbook_cache_revoke_api_key&key_id=' . $key->id), 'newbook_cache_revoke_api_key'); ?>"
+                                   class="button button-small"
+                                   onclick="return confirm('<?php _e('Are you sure you want to revoke this API key? Applications using it will lose access.', 'newbook-api-cache'); ?>');">
+                                    <?php _e('Revoke', 'newbook-api-cache'); ?>
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+
+        <h3><?php _e('Generate New API Key', 'newbook-api-cache'); ?></h3>
+        <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+            <input type="hidden" name="action" value="newbook_cache_generate_api_key" />
+            <?php wp_nonce_field('newbook_cache_generate_api_key'); ?>
+
+            <table class="form-table">
+                <tr>
+                    <th scope="row">
+                        <label for="api_key_label"><?php _e('Key Label', 'newbook-api-cache'); ?></label>
+                    </th>
+                    <td>
+                        <input type="text" id="api_key_label" name="api_key_label" class="regular-text" required
+                               placeholder="<?php _e('e.g., Chrome Extension, EPOS System, PWA App', 'newbook-api-cache'); ?>" />
+                        <p class="description"><?php _e('Give this key a descriptive label to identify where it will be used.', 'newbook-api-cache'); ?></p>
+                    </td>
+                </tr>
+            </table>
+
+            <p class="submit">
+                <input type="submit" class="button button-primary" value="<?php _e('Generate API Key', 'newbook-api-cache'); ?>" />
+            </p>
+        </form>
+
+        <?php
+        // Display newly generated key if present
+        if (isset($_GET['new_key']) && isset($_GET['key_id'])) {
+            $new_key = sanitize_text_field($_GET['new_key']);
+            $key_label = sanitize_text_field($_GET['key_label']);
+            ?>
+            <div class="notice notice-success">
+                <h3><?php _e('API Key Generated Successfully', 'newbook-api-cache'); ?></h3>
+                <p><strong><?php _e('IMPORTANT:', 'newbook-api-cache'); ?></strong> <?php _e('Copy this key now. It will only be shown once and cannot be recovered.', 'newbook-api-cache'); ?></p>
+
+                <p><strong><?php _e('Label:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($key_label); ?></p>
+                <p>
+                    <strong><?php _e('API Key:', 'newbook-api-cache'); ?></strong>
+                    <input type="text" value="<?php echo esc_attr($new_key); ?>" readonly
+                           style="width: 500px; font-family: monospace; font-size: 14px; padding: 5px;"
+                           onclick="this.select();" />
+                    <button type="button" class="button" onclick="navigator.clipboard.writeText('<?php echo esc_js($new_key); ?>'); alert('Copied to clipboard!');">
+                        <?php _e('Copy', 'newbook-api-cache'); ?>
+                    </button>
+                </p>
+
+                <p><strong><?php _e('Usage Example:', 'newbook-api-cache'); ?></strong></p>
+                <pre>curl -X POST \
+  -H "Authorization: Bearer <?php echo esc_html($new_key); ?>" \
+  -H "Content-Type: application/json" \
+  -d '{"period_from":"2025-11-01 00:00:00","period_to":"2025-11-30 23:59:59"}' \
+  <?php echo esc_url(rest_url('newbook-cache/v1/bookings/list')); ?></pre>
+            </div>
+            <?php
+        }
+        ?>
+        <?php
+    }
+
+    /**
+     * Render API Documentation tab
+     */
+    private function render_api_docs_tab() {
+        $endpoints = NewBook_Cache_REST_Controller::get_endpoint_docs();
+        $site_url = rest_url('newbook-cache/v1');
+
+        ?>
+        <h3><?php _e('API Documentation', 'newbook-api-cache'); ?></h3>
+        <p><?php _e('This plugin provides REST endpoints that mirror NewBook API functionality with caching. Use these endpoints as drop-in replacements for direct NewBook API calls.', 'newbook-api-cache'); ?></p>
+
+        <div class="card">
+            <h3><?php _e('Base URL', 'newbook-api-cache'); ?></h3>
+            <p><code><?php echo esc_html($site_url); ?></code></p>
+
+            <h3><?php _e('Authentication', 'newbook-api-cache'); ?></h3>
+            <p><?php _e('All endpoints require authentication via WordPress application passwords OR API keys. See the API Access tab for details.', 'newbook-api-cache'); ?></p>
+        </div>
+
+        <?php foreach ($endpoints as $endpoint_name => $endpoint): ?>
+            <div class="card" style="margin-top: 20px;">
+                <h3><?php echo esc_html(ucwords(str_replace('_', ' ', $endpoint_name))); ?></h3>
+
+                <table class="widefat">
+                    <tr>
+                        <td style="width: 150px;"><strong><?php _e('Endpoint:', 'newbook-api-cache'); ?></strong></td>
+                        <td>
+                            <code><?php echo esc_html($endpoint['path']); ?></code>
+                            <button type="button" class="button button-small" style="margin-left: 10px;"
+                                    onclick="navigator.clipboard.writeText('<?php echo esc_js(site_url($endpoint['path'])); ?>'); alert('Copied!');">
+                                <?php _e('Copy URL', 'newbook-api-cache'); ?>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong><?php _e('Method:', 'newbook-api-cache'); ?></strong></td>
+                        <td><code><?php echo esc_html($endpoint['method']); ?></code></td>
+                    </tr>
+                    <tr>
+                        <td><strong><?php _e('NewBook Action:', 'newbook-api-cache'); ?></strong></td>
+                        <td><code><?php echo esc_html($endpoint['newbook_action']); ?></code></td>
+                    </tr>
+                    <tr>
+                        <td><strong><?php _e('Cached:', 'newbook-api-cache'); ?></strong></td>
+                        <td><?php echo $endpoint['cached'] ? __('Yes', 'newbook-api-cache') : __('No', 'newbook-api-cache'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong><?php _e('Description:', 'newbook-api-cache'); ?></strong></td>
+                        <td><?php echo esc_html($endpoint['description']); ?></td>
+                    </tr>
+                </table>
+
+                <?php if (!empty($endpoint['parameters'])): ?>
+                    <h4><?php _e('Parameters', 'newbook-api-cache'); ?></h4>
+                    <table class="widefat striped">
+                        <thead>
+                            <tr>
+                                <th><?php _e('Parameter', 'newbook-api-cache'); ?></th>
+                                <th><?php _e('Required', 'newbook-api-cache'); ?></th>
+                                <th><?php _e('Type', 'newbook-api-cache'); ?></th>
+                                <th><?php _e('Description', 'newbook-api-cache'); ?></th>
+                                <th><?php _e('Example', 'newbook-api-cache'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($endpoint['parameters'] as $param_name => $param_info): ?>
+                                <tr>
+                                    <td><code><?php echo esc_html($param_name); ?></code></td>
+                                    <td><?php echo $param_info['required'] ? __('Yes', 'newbook-api-cache') : __('No', 'newbook-api-cache'); ?></td>
+                                    <td><?php echo esc_html($param_info['type']); ?></td>
+                                    <td><?php echo esc_html($param_info['description']); ?></td>
+                                    <td><code><?php echo esc_html($param_info['example']); ?></code></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+
+                <h4><?php _e('Example Request (WordPress Auth)', 'newbook-api-cache'); ?></h4>
+                <pre><?php echo $this->generate_curl_example($endpoint, 'wordpress'); ?></pre>
+                <button type="button" class="button button-small"
+                        onclick="navigator.clipboard.writeText(<?php echo htmlspecialchars(json_encode($this->generate_curl_example($endpoint, 'wordpress')), ENT_QUOTES, 'UTF-8'); ?>); alert('Copied!');">
+                    <?php _e('Copy', 'newbook-api-cache'); ?>
+                </button>
+
+                <h4><?php _e('Example Request (API Key)', 'newbook-api-cache'); ?></h4>
+                <pre><?php echo $this->generate_curl_example($endpoint, 'api_key'); ?></pre>
+                <button type="button" class="button button-small"
+                        onclick="navigator.clipboard.writeText(<?php echo htmlspecialchars(json_encode($this->generate_curl_example($endpoint, 'api_key')), ENT_QUOTES, 'UTF-8'); ?>); alert('Copied!');">
+                    <?php _e('Copy', 'newbook-api-cache'); ?>
+                </button>
+
+                <h4><?php _e('Example Response', 'newbook-api-cache'); ?></h4>
+                <pre><?php echo esc_html($endpoint['response']); ?></pre>
+            </div>
+        <?php endforeach; ?>
+        <?php
+    }
+
+    /**
+     * Generate curl example for endpoint
+     */
+    private function generate_curl_example($endpoint, $auth_type = 'wordpress') {
+        $url = site_url($endpoint['path']);
+        $method = $endpoint['method'];
+
+        // Build example data
+        $example_data = array();
+        if (!empty($endpoint['parameters'])) {
+            foreach ($endpoint['parameters'] as $param_name => $param_info) {
+                if ($param_info['required']) {
+                    $example_data[$param_name] = $param_info['example'];
+                }
+            }
+        }
+
+        $curl = "curl -X {$method}";
+
+        if ($auth_type === 'wordpress') {
+            $curl .= " \\\n  -u username:app_password";
+        } else {
+            $curl .= " \\\n  -H \"Authorization: Bearer nbcache_your_api_key_here\"";
+        }
+
+        $curl .= " \\\n  -H \"Content-Type: application/json\"";
+
+        if (!empty($example_data)) {
+            $curl .= " \\\n  -d '" . json_encode($example_data, JSON_PRETTY_PRINT) . "'";
+        }
+
+        $curl .= " \\\n  {$url}";
+
+        return $curl;
+    }
+
+    /**
+     * Handle generate API key action
+     */
+    public function handle_generate_api_key() {
+        check_admin_referer('newbook_cache_generate_api_key');
+
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Unauthorized', 'newbook-api-cache'));
+        }
+
+        $label = isset($_POST['api_key_label']) ? sanitize_text_field($_POST['api_key_label']) : '';
+
+        if (empty($label)) {
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'api-access',
+                'error' => 'missing_label'
+            ), admin_url('options-general.php')));
+            exit;
+        }
+
+        $result = NewBook_API_Key_Manager::generate_key($label);
+
+        if ($result) {
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'api-access',
+                'new_key' => $result['key'],
+                'key_id' => $result['id'],
+                'key_label' => $label
+            ), admin_url('options-general.php')));
+        } else {
+            wp_redirect(add_query_arg(array(
+                'page' => 'newbook-cache-settings',
+                'tab' => 'api-access',
+                'error' => 'generation_failed'
+            ), admin_url('options-general.php')));
+        }
+        exit;
+    }
+
+    /**
+     * Handle revoke API key action
+     */
+    public function handle_revoke_api_key() {
+        check_admin_referer('newbook_cache_revoke_api_key');
+
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Unauthorized', 'newbook-api-cache'));
+        }
+
+        $key_id = isset($_GET['key_id']) ? absint($_GET['key_id']) : 0;
+
+        if ($key_id > 0) {
+            NewBook_API_Key_Manager::revoke_key($key_id);
+        }
+
+        wp_redirect(add_query_arg(array(
+            'page' => 'newbook-cache-settings',
+            'tab' => 'api-access',
+            'message' => 'key_revoked'
+        ), admin_url('options-general.php')));
         exit;
     }
 

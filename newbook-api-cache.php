@@ -30,6 +30,8 @@ require_once NEWBOOK_CACHE_PLUGIN_DIR . 'includes/class-logger.php';
 require_once NEWBOOK_CACHE_PLUGIN_DIR . 'includes/class-api-client.php';
 require_once NEWBOOK_CACHE_PLUGIN_DIR . 'includes/class-newbook-cache.php';
 require_once NEWBOOK_CACHE_PLUGIN_DIR . 'includes/class-cache-sync.php';
+require_once NEWBOOK_CACHE_PLUGIN_DIR . 'includes/class-api-key-manager.php';
+require_once NEWBOOK_CACHE_PLUGIN_DIR . 'includes/class-cache-rest-controller.php';
 
 // Include admin only on admin pages
 if (is_admin()) {
@@ -117,10 +119,27 @@ function newbook_cache_create_tables() {
         INDEX idx_timestamp (timestamp)
     ) $charset_collate;";
 
+    // API keys table
+    $table_api_keys = $wpdb->prefix . 'newbook_cache_api_keys';
+    $sql_api_keys = "CREATE TABLE IF NOT EXISTS $table_api_keys (
+        id BIGINT UNSIGNED AUTO_INCREMENT,
+        key_hash CHAR(64) NOT NULL,
+        key_label VARCHAR(255) NOT NULL,
+        created_date DATETIME NOT NULL,
+        last_used DATETIME DEFAULT NULL,
+        usage_count BIGINT UNSIGNED DEFAULT 0,
+        is_active TINYINT(1) DEFAULT 1,
+        PRIMARY KEY (id),
+        UNIQUE KEY idx_key_hash (key_hash),
+        INDEX idx_is_active (is_active),
+        INDEX idx_created_date (created_date)
+    ) $charset_collate;";
+
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql_cache);
     dbDelta($sql_logs);
     dbDelta($sql_uncached);
+    dbDelta($sql_api_keys);
 }
 
 /**
@@ -188,6 +207,15 @@ function newbook_cache_init() {
     }
 
     NewBook_Cache_Logger::log('NewBook API Cache initialized', NewBook_Cache_Logger::INFO);
+}
+
+/**
+ * Register REST API routes
+ */
+add_action('rest_api_init', 'newbook_cache_register_rest_routes');
+function newbook_cache_register_rest_routes() {
+    $controller = new NewBook_Cache_REST_Controller();
+    $controller->register_routes();
 }
 
 /**
