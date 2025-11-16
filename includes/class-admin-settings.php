@@ -91,8 +91,6 @@ class NewBook_Cache_Admin_Settings {
         <div class="wrap">
             <h1><?php _e('NewBook API Cache Settings', 'newbook-api-cache'); ?></h1>
 
-            <?php settings_errors(); ?>
-
             <h2 class="nav-tab-wrapper">
                 <a href="?page=newbook-cache-settings&tab=credentials" class="nav-tab <?php echo $active_tab === 'credentials' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('API Credentials', 'newbook-api-cache'); ?>
