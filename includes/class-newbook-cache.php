@@ -95,8 +95,31 @@ class NewBook_API_Cache {
                 return $this->handle_sites_list($data, $force_refresh);
 
             default:
-                // Unknown action - log and relay to NewBook API
+                // Unknown action - check if relay is allowed
+                $allow_unknown_relay = get_option('newbook_cache_allow_unknown_relay', false);
+
                 $this->log_uncached_request($action, $data, $context_info);
+
+                if (!$allow_unknown_relay) {
+                    // Relay disabled - return error response
+                    NewBook_Cache_Logger::log(
+                        "BLOCKED: Unknown action '{$action}' - relay disabled for security",
+                        NewBook_Cache_Logger::WARNING,
+                        array_merge(array('action' => $action), $context_info)
+                    );
+
+                    return array(
+                        'data' => array(),
+                        'success' => false,
+                        'message' => "Unknown API action '{$action}' not supported. Only bookings_list, bookings_get, and sites_list are allowed. Enable 'Allow unknown relay' in settings to relay this action."
+                    );
+                }
+
+                // Relay enabled - pass through to NewBook API
+                NewBook_Cache_Logger::log(
+                    "Relaying unknown action '{$action}' to NewBook (relay enabled)",
+                    NewBook_Cache_Logger::INFO
+                );
                 return $this->relay_to_newbook_api($action, $data);
         }
     }

@@ -55,6 +55,7 @@ class NewBook_Cache_Admin_Settings {
         register_setting('newbook_cache_settings', 'newbook_cache_retention_future', array('sanitize_callback' => 'absint', 'default' => 365));
         register_setting('newbook_cache_settings', 'newbook_cache_retention_past', array('sanitize_callback' => 'absint', 'default' => 30));
         register_setting('newbook_cache_settings', 'newbook_cache_retention_cancelled', array('sanitize_callback' => 'absint', 'default' => 30));
+        register_setting('newbook_cache_settings', 'newbook_cache_allow_unknown_relay', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => false));
 
         // Logging
         register_setting('newbook_cache_settings', 'newbook_cache_log_level', array('sanitize_callback' => 'absint', 'default' => NewBook_Cache_Logger::INFO));
@@ -198,6 +199,7 @@ class NewBook_Cache_Admin_Settings {
      */
     private function render_cache_tab($stats) {
         $enabled = get_option('newbook_cache_enabled', true);
+        $allow_unknown_relay = get_option('newbook_cache_allow_unknown_relay', false);
         $retention_future = get_option('newbook_cache_retention_future', 365);
         $retention_past = get_option('newbook_cache_retention_past', 30);
         $retention_cancelled = get_option('newbook_cache_retention_cancelled', 30);
@@ -215,6 +217,22 @@ class NewBook_Cache_Admin_Settings {
                         <input type="checkbox" name="newbook_cache_enabled" value="1" <?php checked($enabled, true); ?> />
                         <?php _e('Enable NewBook API caching', 'newbook-api-cache'); ?>
                     </label>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row"><?php _e('Unknown API Actions', 'newbook-api-cache'); ?></th>
+                <td>
+                    <label>
+                        <input type="checkbox" name="newbook_cache_allow_unknown_relay" value="1" <?php checked($allow_unknown_relay, true); ?> />
+                        <?php _e('Allow relaying unknown API actions to NewBook', 'newbook-api-cache'); ?>
+                    </label>
+                    <p class="description">
+                        <?php _e('<strong>Security Notice:</strong> By default, only known read-only actions (bookings_list, bookings_get, sites_list) are processed.', 'newbook-api-cache'); ?>
+                        <br />
+                        <?php _e('When disabled (recommended), unknown actions will be blocked and logged.', 'newbook-api-cache'); ?>
+                        <br />
+                        <?php _e('Only enable this if you need to relay other NewBook API actions through this plugin.', 'newbook-api-cache'); ?>
+                    </p>
                 </td>
             </tr>
             <tr>
