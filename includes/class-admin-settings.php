@@ -418,6 +418,48 @@ class NewBook_Cache_Admin_Settings {
                             <option value="<?php echo NewBook_Cache_Logger::DEBUG; ?>" <?php selected($log_level, NewBook_Cache_Logger::DEBUG); ?>><?php _e('Debug', 'newbook-api-cache'); ?></option>
                         </select>
                         <p class="description"><?php _e('Control logging verbosity. Debug logs the most detail.', 'newbook-api-cache'); ?></p>
+
+                        <details style="margin-top: 10px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #2271b1;"><?php _e('What do these logging levels mean?', 'newbook-api-cache'); ?></summary>
+                            <div style="margin-top: 10px; padding: 10px; background: #f0f0f1; border-left: 4px solid #2271b1;">
+                                <p><strong><?php _e('Off (0):', 'newbook-api-cache'); ?></strong></p>
+                                <ul style="margin-left: 20px;">
+                                    <li><?php _e('No logging at all', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Use when you don\'t need any logs or want to minimize database usage', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Not recommended unless you have a specific reason', 'newbook-api-cache'); ?></li>
+                                </ul>
+
+                                <p style="margin-top: 10px;"><strong><?php _e('Error (1):', 'newbook-api-cache'); ?></strong></p>
+                                <ul style="margin-left: 20px;">
+                                    <li><?php _e('Logs only critical failures and errors', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Examples: API authentication failures, database errors, cache encryption failures', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Best for production environments where you only need to know when things go wrong', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Minimal performance impact and database usage', 'newbook-api-cache'); ?></li>
+                                </ul>
+
+                                <p style="margin-top: 10px;"><strong><?php _e('Info (2) - Recommended:', 'newbook-api-cache'); ?></strong></p>
+                                <ul style="margin-left: 20px;">
+                                    <li><?php _e('Logs errors + important events and milestones', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Examples: API connections, cache hits/misses, sync operations, API key usage', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Provides good visibility into what the plugin is doing without excessive detail', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Recommended for most use cases - balanced detail and performance', 'newbook-api-cache'); ?></li>
+                                </ul>
+
+                                <p style="margin-top: 10px;"><strong><?php _e('Debug (3):', 'newbook-api-cache'); ?></strong></p>
+                                <ul style="margin-left: 20px;">
+                                    <li><?php _e('Logs everything including detailed request/response data', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Examples: Every API request with client type, user, IP, route, all cache lookups, data transformations', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Use when troubleshooting issues or understanding plugin behavior in detail', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Warning: Generates many log entries - may impact performance and fill database quickly', 'newbook-api-cache'); ?></li>
+                                    <li><?php _e('Only use temporarily for debugging, then switch back to Info or Error', 'newbook-api-cache'); ?></li>
+                                </ul>
+
+                                <p style="margin-top: 15px; padding: 10px; background: #fff; border-left: 4px solid #d63638;">
+                                    <strong><?php _e('Privacy Note:', 'newbook-api-cache'); ?></strong><br>
+                                    <?php _e('Info and Debug levels log user activity including IP addresses (anonymized if enabled below), usernames, and request details. Ensure this complies with your privacy policy and data protection requirements.', 'newbook-api-cache'); ?>
+                                </p>
+                            </div>
+                        </details>
                     </td>
                 </tr>
                 <tr>
