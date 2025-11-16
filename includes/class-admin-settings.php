@@ -194,6 +194,7 @@ class NewBook_Cache_Admin_Settings {
                     $status_code = isset($_GET['status_code']) ? absint($_GET['status_code']) : 412;
                     $error_msg = isset($_GET['test_error']) ? urldecode(sanitize_text_field($_GET['test_error'])) : 'Precondition failed';
                     $test_region = isset($_GET['region']) ? sanitize_text_field($_GET['region']) : $region;
+                    $raw_response = isset($_GET['raw_response']) ? urldecode($_GET['raw_response']) : '';
                     ?>
                     <div class="notice notice-error is-dismissible">
                         <p>
@@ -212,7 +213,13 @@ class NewBook_Cache_Admin_Settings {
                             <?php _e('Try changing the Region setting to match where your NewBook account is located (Australia, New Zealand, Europe, or United States).', 'newbook-api-cache'); ?>
                         </p>
                         <p><strong><?php _e('HTTP Status:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($status_code); ?></p>
-                        <p><strong><?php _e('API Response:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($error_msg); ?></p>
+                        <p><strong><?php _e('NewBook Error Message:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($error_msg); ?></p>
+                        <?php if (!empty($raw_response)): ?>
+                            <details style="margin-top: 10px;">
+                                <summary style="cursor: pointer; font-weight: 600;"><?php _e('Show Raw API Response', 'newbook-api-cache'); ?></summary>
+                                <pre style="margin-top: 10px; padding: 10px; background: #f0f0f1; overflow-x: auto; font-size: 12px;"><?php echo esc_html($raw_response); ?></pre>
+                            </details>
+                        <?php endif; ?>
                     </div>
                     <?php
                     break;
@@ -1047,11 +1054,25 @@ class NewBook_Cache_Admin_Settings {
             exit;
         } elseif ($status_code === 412) {
             // Precondition Failed - usually region/API key mismatch
-            $error_msg = isset($data['message']) ? $data['message'] : 'Precondition failed - check region and API key match';
+            // Try multiple possible error field names from NewBook response
+            $error_msg = '';
+            if (isset($data['message'])) {
+                $error_msg = $data['message'];
+            } elseif (isset($data['error'])) {
+                $error_msg = $data['error'];
+            } elseif (isset($data['error_message'])) {
+                $error_msg = $data['error_message'];
+            } elseif (isset($data['msg'])) {
+                $error_msg = $data['msg'];
+            } else {
+                $error_msg = 'Precondition failed - check region and API key match';
+            }
+
             NewBook_Cache_Logger::log('Test connection HTTP 412: Region/API key mismatch', NewBook_Cache_Logger::WARNING, array(
                 'status_code' => $status_code,
                 'region' => $region,
-                'response_body' => $response_body
+                'response_body' => $response_body,
+                'decoded_data' => $data
             ));
             wp_redirect(add_query_arg(array(
                 'page' => 'newbook-cache-settings',
@@ -1059,7 +1080,8 @@ class NewBook_Cache_Admin_Settings {
                 'test_result' => 'precondition_failed',
                 'status_code' => $status_code,
                 'region' => $region,
-                'test_error' => urlencode($error_msg)
+                'test_error' => urlencode($error_msg),
+                'raw_response' => urlencode(substr($response_body, 0, 500)) // First 500 chars
             ), admin_url('options-general.php')));
             exit;
         } else {
