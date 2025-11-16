@@ -45,26 +45,26 @@ class NewBook_Cache_Admin_Settings {
      * Register plugin settings
      */
     public function register_settings() {
-        // API Credentials
-        register_setting('newbook_cache_settings', 'newbook_cache_username', array('sanitize_callback' => 'sanitize_text_field'));
-        register_setting('newbook_cache_settings', 'newbook_cache_password', array('sanitize_callback' => 'sanitize_text_field'));
-        register_setting('newbook_cache_settings', 'newbook_cache_api_key', array('sanitize_callback' => 'sanitize_text_field'));
-        register_setting('newbook_cache_settings', 'newbook_cache_region', array('sanitize_callback' => 'sanitize_text_field', 'default' => 'au'));
+        // API Credentials (separate group)
+        register_setting('newbook_cache_credentials', 'newbook_cache_username', array('sanitize_callback' => 'sanitize_text_field'));
+        register_setting('newbook_cache_credentials', 'newbook_cache_password', array('sanitize_callback' => 'sanitize_text_field'));
+        register_setting('newbook_cache_credentials', 'newbook_cache_api_key', array('sanitize_callback' => 'sanitize_text_field'));
+        register_setting('newbook_cache_credentials', 'newbook_cache_region', array('sanitize_callback' => 'sanitize_text_field', 'default' => 'au'));
 
-        // Cache Settings
-        register_setting('newbook_cache_settings', 'newbook_cache_enabled', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
-        register_setting('newbook_cache_settings', 'newbook_cache_retention_future', array('sanitize_callback' => 'absint', 'default' => 365));
-        register_setting('newbook_cache_settings', 'newbook_cache_retention_past', array('sanitize_callback' => 'absint', 'default' => 30));
-        register_setting('newbook_cache_settings', 'newbook_cache_retention_cancelled', array('sanitize_callback' => 'absint', 'default' => 30));
-        register_setting('newbook_cache_settings', 'newbook_cache_allow_unknown_relay', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => false));
+        // Cache Settings (separate group)
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_enabled', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_future', array('sanitize_callback' => 'absint', 'default' => 365));
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_past', array('sanitize_callback' => 'absint', 'default' => 30));
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_cancelled', array('sanitize_callback' => 'absint', 'default' => 30));
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_allow_unknown_relay', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => false));
 
-        // Logging
-        register_setting('newbook_cache_settings', 'newbook_cache_log_level', array('sanitize_callback' => 'absint', 'default' => NewBook_Cache_Logger::INFO));
-        register_setting('newbook_cache_settings', 'newbook_cache_max_logs', array('sanitize_callback' => 'absint', 'default' => 1000));
+        // Logging (separate group)
+        register_setting('newbook_cache_logging', 'newbook_cache_log_level', array('sanitize_callback' => 'absint', 'default' => NewBook_Cache_Logger::INFO));
+        register_setting('newbook_cache_logging', 'newbook_cache_max_logs', array('sanitize_callback' => 'absint', 'default' => 1000));
 
-        // Privacy & GDPR
-        register_setting('newbook_cache_settings', 'newbook_cache_anonymize_ips', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
-        register_setting('newbook_cache_settings', 'newbook_cache_log_retention_days', array('sanitize_callback' => 'absint', 'default' => 30));
+        // Privacy & GDPR (same group as logging since they're on the same form)
+        register_setting('newbook_cache_logging', 'newbook_cache_anonymize_ips', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
+        register_setting('newbook_cache_logging', 'newbook_cache_log_retention_days', array('sanitize_callback' => 'absint', 'default' => 30));
     }
 
     /**
@@ -222,7 +222,7 @@ class NewBook_Cache_Admin_Settings {
         ?>
 
         <form method="post" action="options.php">
-            <?php settings_fields('newbook_cache_settings'); ?>
+            <?php settings_fields('newbook_cache_credentials'); ?>
             <table class="form-table">
                 <tr>
                     <th scope="row"><?php _e('NewBook Username', 'newbook-api-cache'); ?></th>
@@ -285,7 +285,7 @@ class NewBook_Cache_Admin_Settings {
 
         ?>
         <form method="post" action="options.php">
-            <?php settings_fields('newbook_cache_settings'); ?>
+            <?php settings_fields('newbook_cache_cache_settings'); ?>
             <table class="form-table">
                 <tr>
                     <th scope="row"><?php _e('Enable Caching', 'newbook-api-cache'); ?></th>
@@ -405,7 +405,7 @@ class NewBook_Cache_Admin_Settings {
 
         ?>
         <form method="post" action="options.php">
-            <?php settings_fields('newbook_cache_settings'); ?>
+            <?php settings_fields('newbook_cache_logging'); ?>
             <h3><?php _e('Logging Settings', 'newbook-api-cache'); ?></h3>
             <table class="form-table">
                 <tr>
