@@ -218,9 +218,6 @@ function newbook_cache_init() {
     if (is_admin()) {
         new NewBook_Cache_Admin_Settings();
     }
-
-    // Only log initialization at DEBUG level to avoid spamming logs
-    NewBook_Cache_Logger::log('NewBook API Cache initialized', NewBook_Cache_Logger::DEBUG);
 }
 
 /**
