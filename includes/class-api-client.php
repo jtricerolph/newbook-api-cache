@@ -39,6 +39,10 @@ class NewBook_API_Client {
             );
         }
 
+        // Add required fields to request body
+        $data['api_key'] = $api_key;
+        $data['region'] = $region;
+
         // Build request
         $url = $this->api_base_url . $action;
         $args = array(
@@ -140,12 +144,17 @@ class NewBook_API_Client {
      */
     private function sanitize_params($data) {
         $safe_params = array();
-        $safe_keys = array('booking_id', 'period_from', 'period_to', 'list_type', 'check_from', 'check_to', 'status');
+        $safe_keys = array('booking_id', 'period_from', 'period_to', 'list_type', 'check_from', 'check_to', 'status', 'region');
 
         foreach ($safe_keys as $key) {
             if (isset($data[$key])) {
                 $safe_params[$key] = $data[$key];
             }
+        }
+
+        // Indicate api_key is present without logging its value
+        if (isset($data['api_key'])) {
+            $safe_params['api_key'] = '(provided)';
         }
 
         return $safe_params;
