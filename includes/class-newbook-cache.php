@@ -138,8 +138,24 @@ class NewBook_API_Cache {
         }
 
         // Extract parameters
-        $period_from = isset($data['period_from']) ? substr($data['period_from'], 0, 10) : '';
-        $period_to = isset($data['period_to']) ? substr($data['period_to'], 0, 10) : '';
+        // Accept full datetime if provided, otherwise append time to date-only strings
+        $period_from_raw = isset($data['period_from']) ? $data['period_from'] : '';
+        $period_to_raw = isset($data['period_to']) ? $data['period_to'] : '';
+
+        // If only date provided (10 chars or less), append appropriate time
+        // Otherwise extract datetime and replace 'T' with space for SQL compatibility
+        if (strlen($period_from_raw) <= 10) {
+            $period_from = substr($period_from_raw, 0, 10) . ' 00:00:00';
+        } else {
+            $period_from = str_replace('T', ' ', substr($period_from_raw, 0, 19));
+        }
+
+        if (strlen($period_to_raw) <= 10) {
+            $period_to = substr($period_to_raw, 0, 10) . ' 23:59:59';
+        } else {
+            $period_to = str_replace('T', ' ', substr($period_to_raw, 0, 19));
+        }
+
         $list_type = isset($data['list_type']) ? $data['list_type'] : 'staying';
 
         // Try cache
