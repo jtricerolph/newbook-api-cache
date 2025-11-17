@@ -898,6 +898,28 @@ class NewBook_Cache_Admin_Settings {
                 <td><strong><?php _e('Cancelled:', 'newbook-api-cache'); ?></strong></td>
                 <td><?php echo number_format($stats['cancelled'] ?? 0); ?></td>
             </tr>
+            <tr>
+                <td><strong><?php _e('Database Size:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo number_format($stats['database_size_mb'] ?? 0, 2); ?> MB</td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Last Full Refresh:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo esc_html($this->time_ago($last_full_refresh)); ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Last Incremental Sync:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo esc_html($this->time_ago($last_incremental_sync)); ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Last Cleanup:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo esc_html($this->time_ago($last_cleanup)); ?></td>
+            </tr>
+            <?php if (!empty($stats['all_statuses'])): ?>
+            <tr>
+                <td><strong><?php _e('All Status Values (Debug):', 'newbook-api-cache'); ?></strong></td>
+                <td><code><?php echo esc_html(implode(', ', $stats['all_statuses'])); ?></code></td>
+            </tr>
+            <?php endif; ?>
         </table>
 
         <!-- System Information -->

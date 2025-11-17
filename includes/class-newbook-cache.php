@@ -640,9 +640,12 @@ class NewBook_API_Cache {
         $historical_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE cache_type = 'historical'");
 
         // Status breakdown
-        $active_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status NOT IN ('cancelled', 'checked_out', 'no_show')");
-        $checked_out = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status = 'checked_out'");
+        $active_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status NOT IN ('cancelled', 'checked_out', 'no_show', 'checked-out')");
+        $checked_out = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status IN ('checked_out', 'checked-out')");
         $cancelled = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status = 'cancelled'");
+
+        // Get all distinct statuses for debugging
+        $all_statuses = $wpdb->get_col("SELECT DISTINCT booking_status FROM {$table} ORDER BY booking_status");
 
         $db_size = $wpdb->get_var("
             SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2)
@@ -658,7 +661,8 @@ class NewBook_API_Cache {
             'active_bookings' => (int) $active_bookings,
             'checked_out' => (int) $checked_out,
             'cancelled' => (int) $cancelled,
-            'database_size_mb' => (float) $db_size
+            'database_size_mb' => (float) $db_size,
+            'all_statuses' => $all_statuses // For debugging
         );
     }
 
