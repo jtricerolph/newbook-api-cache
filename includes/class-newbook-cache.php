@@ -291,17 +291,41 @@ class NewBook_API_Cache {
         $table = $wpdb->prefix . 'newbook_cache';
 
         // Build query based on list_type
-        $where_clause = $wpdb->prepare(
-            "arrival_date <= %s AND departure_date > %s",
-            $to_date,
-            $from_date
-        );
+        // Different list_types use different date fields:
+        // - 'placed': Uses booking_placed_date (when booking was created)
+        // - 'cancelled': Uses booking_cancelled_date (when booking was cancelled)
+        // - 'staying': Uses arrival_date/departure_date (stay dates)
+        if ($list_type === 'placed') {
+            // Query by placement date
+            $where_clause = $wpdb->prepare(
+                "booking_placed_date >= %s AND booking_placed_date <= %s AND booking_placed_date IS NOT NULL",
+                $from_date,
+                $to_date
+            );
+            NewBook_Cache_Logger::log("Cache query using booking_placed_date for list_type=placed", NewBook_Cache_Logger::DEBUG);
 
-        // Filter by status for list_type
-        if ($list_type === 'staying') {
-            $where_clause .= " AND booking_status NOT IN ('cancelled', 'no_show')";
         } elseif ($list_type === 'cancelled') {
-            $where_clause .= " AND booking_status = 'cancelled'";
+            // Query by cancellation date
+            $where_clause = $wpdb->prepare(
+                "booking_cancelled_date >= %s AND booking_cancelled_date <= %s AND booking_cancelled_date IS NOT NULL",
+                $from_date,
+                $to_date
+            );
+            NewBook_Cache_Logger::log("Cache query using booking_cancelled_date for list_type=cancelled", NewBook_Cache_Logger::DEBUG);
+
+        } else {
+            // Use arrival/departure dates for staying queries
+            $where_clause = $wpdb->prepare(
+                "arrival_date <= %s AND departure_date > %s",
+                $to_date,
+                $from_date
+            );
+
+            if ($list_type === 'staying') {
+                $where_clause .= " AND booking_status NOT IN ('cancelled', 'no_show')";
+            }
+
+            NewBook_Cache_Logger::log("Cache query using arrival/departure dates for list_type={$list_type}", NewBook_Cache_Logger::DEBUG);
         }
 
         $results = $wpdb->get_results("SELECT encrypted_data FROM {$table} WHERE {$where_clause}");
@@ -364,6 +388,23 @@ class NewBook_API_Cache {
         $status = isset($booking['booking_status']) ? strtolower($booking['booking_status']) : 'confirmed';
         $group_id = isset($booking['group_id']) ? $booking['group_id'] : null;
 
+        // Extract placed and cancelled timestamps
+        $booking_placed = null;
+        if (isset($booking['booking_placed']) && !empty($booking['booking_placed'])) {
+            $booking_placed = $booking['booking_placed'];
+            if (strpos($booking_placed, 'T') !== false) {
+                $booking_placed = str_replace('T', ' ', $booking_placed);
+            }
+        }
+
+        $booking_cancelled = null;
+        if (isset($booking['booking_cancelled']) && !empty($booking['booking_cancelled'])) {
+            $booking_cancelled = $booking['booking_cancelled'];
+            if (strpos($booking_cancelled, 'T') !== false) {
+                $booking_cancelled = str_replace('T', ' ', $booking_cancelled);
+            }
+        }
+
         // Determine cache type
         $cache_type = (strtotime($departure) >= strtotime('today')) ? 'hot' : 'historical';
 
@@ -381,6 +422,8 @@ class NewBook_API_Cache {
             'arrival_date' => $arrival,
             'departure_date' => $departure,
             'booking_status' => $status,
+            'booking_placed_date' => $booking_placed,
+            'booking_cancelled_date' => $booking_cancelled,
             'group_id' => $group_id,
             'room_name' => $room,
             'num_guests' => $guests,

@@ -89,6 +89,8 @@ function newbook_cache_create_tables() {
         arrival_date DATE NOT NULL,
         departure_date DATE NOT NULL,
         booking_status VARCHAR(20) DEFAULT 'confirmed',
+        booking_placed_date DATETIME DEFAULT NULL,
+        booking_cancelled_date DATETIME DEFAULT NULL,
         group_id VARCHAR(50) DEFAULT NULL,
         room_name VARCHAR(100) DEFAULT NULL,
         num_guests TINYINT UNSIGNED DEFAULT 0,
@@ -98,6 +100,8 @@ function newbook_cache_create_tables() {
         PRIMARY KEY (booking_id),
         INDEX idx_dates (arrival_date, departure_date),
         INDEX idx_status (booking_status),
+        INDEX idx_placed (booking_placed_date),
+        INDEX idx_cancelled (booking_cancelled_date),
         INDEX idx_cache_type (cache_type)
     ) $charset_collate;";
 
@@ -197,6 +201,48 @@ function newbook_cache_cron_intervals($schedules) {
 }
 
 /**
+ * Check plugin version and run migrations if needed
+ */
+function newbook_cache_check_version() {
+    $db_version = get_option('newbook_cache_db_version', '0');
+    $current_version = NEWBOOK_CACHE_VERSION;
+
+    // Run migrations if database version is older
+    if (version_compare($db_version, $current_version, '<')) {
+        newbook_cache_run_migrations($db_version);
+        update_option('newbook_cache_db_version', $current_version);
+    }
+}
+
+/**
+ * Run database migrations
+ *
+ * @param string $from_version The version we're upgrading from
+ */
+function newbook_cache_run_migrations($from_version) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'newbook_cache';
+
+    // Migration 1.0.0: Add booking_placed_date and booking_cancelled_date columns
+    if (version_compare($from_version, '1.0.0', '<')) {
+        $placed_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table} LIKE 'booking_placed_date'");
+        $cancelled_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table} LIKE 'booking_cancelled_date'");
+
+        if (empty($placed_exists)) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN booking_placed_date DATETIME DEFAULT NULL AFTER booking_status");
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_placed (booking_placed_date)");
+            NewBook_Cache_Logger::log('Database migration: Added booking_placed_date column and index', NewBook_Cache_Logger::INFO);
+        }
+
+        if (empty($cancelled_exists)) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN booking_cancelled_date DATETIME DEFAULT NULL AFTER booking_placed_date");
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX idx_cancelled (booking_cancelled_date)");
+            NewBook_Cache_Logger::log('Database migration: Added booking_cancelled_date column and index', NewBook_Cache_Logger::INFO);
+        }
+    }
+}
+
+/**
  * Initialize plugin
  */
 add_action('plugins_loaded', 'newbook_cache_init', 5); // Priority 5 (early loading)
@@ -206,6 +252,9 @@ function newbook_cache_init() {
         add_action('admin_notices', 'newbook_cache_missing_dependency_notice');
         return;
     }
+
+    // Run database migrations if needed
+    newbook_cache_check_version();
 
     // Initialize cache system
     global $newbook_api_cache;
