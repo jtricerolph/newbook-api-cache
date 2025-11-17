@@ -649,6 +649,85 @@ class NewBook_Cache_Admin_Settings {
             </tbody>
         </table>
 
+        <!-- System Cron Setup Instructions -->
+        <details style="margin-bottom: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 14px; color: #2271b1;">
+                <?php _e('📖 How to Set Up System Cron for Reliable Syncs', 'newbook-api-cache'); ?>
+            </summary>
+
+            <div style="margin-top: 15px; line-height: 1.6;">
+                <h4 style="margin-top: 0;"><?php _e('Why Use System Cron?', 'newbook-api-cache'); ?></h4>
+                <p><?php _e('WordPress cron (WP-Cron) only runs when someone visits your site. This means:', 'newbook-api-cache'); ?></p>
+                <ul style="margin-left: 20px;">
+                    <li><?php _e('Overnight: No traffic = no syncs = stale data in the morning', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Low traffic sites: Unreliable sync schedule', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('High traffic sites: Multiple simultaneous cron executions (performance impact)', 'newbook-api-cache'); ?></li>
+                </ul>
+                <p><strong><?php _e('Solution:', 'newbook-api-cache'); ?></strong> <?php _e('Set up a real system cron job to trigger wp-cron.php every minute.', 'newbook-api-cache'); ?></p>
+
+                <h4><?php _e('Step-by-Step Setup', 'newbook-api-cache'); ?></h4>
+
+                <h5 style="color: #2271b1;"><?php _e('Option 1: cPanel Cron Jobs (Most Common)', 'newbook-api-cache'); ?></h5>
+                <ol style="margin-left: 20px;">
+                    <li><?php _e('Log in to your cPanel', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Find "Cron Jobs" under "Advanced" section', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Set "Common Settings" to: <strong>Once Per Minute (* * * * *)</strong>', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('In the "Command" field, enter:', 'newbook-api-cache'); ?>
+                        <pre style="background: #fff; padding: 10px; border: 1px solid #ccc; overflow-x: auto; margin: 10px 0;">wget -q -O - <?php echo site_url('wp-cron.php'); ?>?doing_wp_cron >/dev/null 2>&1</pre>
+                        <p class="description"><?php _e('Or use curl if wget is not available:', 'newbook-api-cache'); ?></p>
+                        <pre style="background: #fff; padding: 10px; border: 1px solid #ccc; overflow-x: auto; margin: 10px 0;">curl -s <?php echo site_url('wp-cron.php'); ?>?doing_wp_cron >/dev/null 2>&1</pre>
+                    </li>
+                    <li><?php _e('Click "Add New Cron Job"', 'newbook-api-cache'); ?></li>
+                </ol>
+
+                <h5 style="color: #2271b1;"><?php _e('Option 2: SSH/Terminal Access', 'newbook-api-cache'); ?></h5>
+                <ol style="margin-left: 20px;">
+                    <li><?php _e('SSH into your server', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Edit crontab: <code>crontab -e</code>', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Add this line:', 'newbook-api-cache'); ?>
+                        <pre style="background: #fff; padding: 10px; border: 1px solid #ccc; overflow-x: auto; margin: 10px 0;">* * * * * curl -s <?php echo site_url('wp-cron.php'); ?>?doing_wp_cron >/dev/null 2>&1</pre>
+                    </li>
+                    <li><?php _e('Save and exit (in vim: press ESC, type :wq, press ENTER)', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Verify: <code>crontab -l</code>', 'newbook-api-cache'); ?></li>
+                </ol>
+
+                <h5 style="color: #2271b1;"><?php _e('Option 3: Disable WP-Cron (Advanced)', 'newbook-api-cache'); ?></h5>
+                <p><?php _e('After setting up system cron, you can optionally disable WP-Cron to prevent duplicate executions:', 'newbook-api-cache'); ?></p>
+                <ol style="margin-left: 20px;">
+                    <li><?php _e('Add this line to your <code>wp-config.php</code> file (above "/* That\'s all, stop editing! */"):', 'newbook-api-cache'); ?>
+                        <pre style="background: #fff; padding: 10px; border: 1px solid #ccc; overflow-x: auto; margin: 10px 0;">define('DISABLE_WP_CRON', true);</pre>
+                    </li>
+                    <li><?php _e('This stops WP-Cron from running on page loads, relying entirely on your system cron', 'newbook-api-cache'); ?></li>
+                </ol>
+
+                <h4><?php _e('Verification', 'newbook-api-cache'); ?></h4>
+                <p><?php _e('After setting up system cron:', 'newbook-api-cache'); ?></p>
+                <ol style="margin-left: 20px;">
+                    <li><?php _e('Wait 1-2 minutes', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Check the "Last Executed" times in the Sync Jobs Status table below', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Incremental sync should show a recent timestamp (within last minute)', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Check the Logging & Debug tab to see sync activity', 'newbook-api-cache'); ?></li>
+                </ol>
+
+                <h4><?php _e('Troubleshooting', 'newbook-api-cache'); ?></h4>
+                <ul style="margin-left: 20px;">
+                    <li><strong><?php _e('Syncs still not running?', 'newbook-api-cache'); ?></strong>
+                        <ul style="margin-left: 20px;">
+                            <li><?php _e('Check your server\'s cron logs (usually in /var/log/cron or via cPanel)', 'newbook-api-cache'); ?></li>
+                            <li><?php _e('Try the alternative command (wget vs curl)', 'newbook-api-cache'); ?></li>
+                            <li><?php _e('Ensure your server can make HTTP requests to itself', 'newbook-api-cache'); ?></li>
+                        </ul>
+                    </li>
+                    <li><strong><?php _e('504 Gateway Timeout errors?', 'newbook-api-cache'); ?></strong>
+                        <ul style="margin-left: 20px;">
+                            <li><?php _e('Your cron jobs might be taking too long', 'newbook-api-cache'); ?></li>
+                            <li><?php _e('Consider increasing PHP max_execution_time or adjusting sync intervals', 'newbook-api-cache'); ?></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </details>
+
         <!-- Sync Job Status -->
         <h3><?php _e('Sync Jobs Status', 'newbook-api-cache'); ?></h3>
 
