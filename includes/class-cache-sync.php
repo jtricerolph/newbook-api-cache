@@ -61,7 +61,7 @@ class NewBook_Cache_Sync {
         $retention_future = get_option('newbook_cache_retention_future', 365);
 
         // Step 1: Fetch future bookings (staying) in 30-day chunks
-        NewBook_Cache_Logger::log('Fetching future bookings (next 12 months)', NewBook_Cache_Logger::INFO);
+        NewBook_Cache_Logger::log("Fetching future bookings (next {$retention_future} days)", NewBook_Cache_Logger::INFO);
 
         $months_to_fetch = ceil($retention_future / 30);
         for ($chunk = 0; $chunk < $months_to_fetch; $chunk++) {
