@@ -341,7 +341,9 @@ class NewBook_API_Cache {
             );
 
             if ($list_type === 'staying') {
-                $where_clause .= " AND booking_status NOT IN ('cancelled', 'departed', 'no_show')";
+                // Match NewBook API behavior: staying includes departed, only excludes:
+                // Cancelled, No Show, Quote, Waitlist, Owner Occupied
+                $where_clause .= " AND booking_status NOT IN ('cancelled', 'no_show', 'quote', 'waitlist', 'owner_occupied')";
             }
 
             NewBook_Cache_Logger::log("Cache query using arrival/departure dates for list_type={$list_type}", NewBook_Cache_Logger::DEBUG);
