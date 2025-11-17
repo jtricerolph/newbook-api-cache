@@ -187,7 +187,8 @@ class NewBook_Cache_Sync {
         $changes = $response['data'];
 
         if (empty($changes)) {
-            // No changes - don't log (prevent spam)
+            // No changes - log at DEBUG level to provide context for the "0 results" API log above
+            NewBook_Cache_Logger::log("Incremental sync: No changes detected (0 bookings modified/added since last sync)", NewBook_Cache_Logger::DEBUG);
             update_option('newbook_cache_last_incremental_sync', current_time('mysql'));
             return;
         }

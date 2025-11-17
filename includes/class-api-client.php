@@ -131,7 +131,10 @@ class NewBook_API_Client {
             );
         }
 
-        NewBook_Cache_Logger::log("API success: {$action} - " . count($response_data['data'] ?? []) . " results", NewBook_Cache_Logger::INFO);
+        // Log API success - use DEBUG level for 0 results to reduce log noise (especially from incremental syncs)
+        $result_count = count($response_data['data'] ?? []);
+        $log_level = ($result_count > 0) ? NewBook_Cache_Logger::INFO : NewBook_Cache_Logger::DEBUG;
+        NewBook_Cache_Logger::log("API success: {$action} - {$result_count} results", $log_level);
 
         return $response_data;
     }
