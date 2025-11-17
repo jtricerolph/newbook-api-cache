@@ -1057,8 +1057,30 @@ class NewBook_Cache_Admin_Settings {
         $anonymize_ips = get_option('newbook_cache_anonymize_ips', true);
         $log_retention_days = get_option('newbook_cache_log_retention_days', 30);
 
-        $logs = NewBook_Cache_Logger::get_logs(array('limit' => 50));
-        $log_count = NewBook_Cache_Logger::get_log_count();
+        // Get filter parameters
+        $filter_level = isset($_GET['filter_level']) && $_GET['filter_level'] !== '' ? intval($_GET['filter_level']) : null;
+        $search = isset($_GET['search']) ? sanitize_text_field($_GET['search']) : '';
+        $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+        $per_page = 50;
+        $offset = ($paged - 1) * $per_page;
+
+        // Build query args
+        $query_args = array(
+            'limit' => $per_page,
+            'offset' => $offset
+        );
+
+        if ($filter_level !== null) {
+            $query_args['level'] = $filter_level;
+        }
+
+        if (!empty($search)) {
+            $query_args['search'] = $search;
+        }
+
+        $logs = NewBook_Cache_Logger::get_logs($query_args);
+        $log_count = NewBook_Cache_Logger::get_log_count($query_args);
+        $total_pages = ceil($log_count / $per_page);
 
         ?>
         <form method="post" action="options.php">
@@ -1163,6 +1185,44 @@ class NewBook_Cache_Admin_Settings {
 
         <h3><?php _e('Recent Log Entries', 'newbook-api-cache'); ?> (<span id="newbook-cache-logs-count"><?php echo $log_count; ?></span> <?php _e('total', 'newbook-api-cache'); ?>)</h3>
 
+        <!-- Search and Filter Form -->
+        <form method="get" action="" style="margin-bottom: 15px; background: #f9f9f9; padding: 15px; border: 1px solid #ddd; border-radius: 4px;">
+            <input type="hidden" name="page" value="newbook-cache-settings" />
+            <input type="hidden" name="tab" value="logs" />
+
+            <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+                <div>
+                    <label for="search" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                        <?php _e('Search:', 'newbook-api-cache'); ?>
+                    </label>
+                    <input type="text" id="search" name="search" value="<?php echo esc_attr($search); ?>"
+                           placeholder="<?php _e('Search messages...', 'newbook-api-cache'); ?>"
+                           class="regular-text" />
+                </div>
+
+                <div>
+                    <label for="filter_level" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                        <?php _e('Level:', 'newbook-api-cache'); ?>
+                    </label>
+                    <select id="filter_level" name="filter_level">
+                        <option value=""><?php _e('All Levels', 'newbook-api-cache'); ?></option>
+                        <option value="<?php echo NewBook_Cache_Logger::ERROR; ?>" <?php selected($filter_level, NewBook_Cache_Logger::ERROR); ?>><?php _e('Error', 'newbook-api-cache'); ?></option>
+                        <option value="<?php echo NewBook_Cache_Logger::INFO; ?>" <?php selected($filter_level, NewBook_Cache_Logger::INFO); ?>><?php _e('Info', 'newbook-api-cache'); ?></option>
+                        <option value="<?php echo NewBook_Cache_Logger::DEBUG; ?>" <?php selected($filter_level, NewBook_Cache_Logger::DEBUG); ?>><?php _e('Debug', 'newbook-api-cache'); ?></option>
+                    </select>
+                </div>
+
+                <div>
+                    <button type="submit" class="button button-primary">
+                        <?php _e('Filter', 'newbook-api-cache'); ?>
+                    </button>
+                    <a href="?page=newbook-cache-settings&tab=logs" class="button">
+                        <?php _e('Reset', 'newbook-api-cache'); ?>
+                    </a>
+                </div>
+            </div>
+        </form>
+
         <p>
             <button type="button" id="newbook-cache-refresh-logs" class="button">
                 <?php _e('Refresh Logs', 'newbook-api-cache'); ?>
@@ -1185,6 +1245,51 @@ class NewBook_Cache_Admin_Settings {
                 <?php echo $this->render_logs_rows($logs); ?>
             </tbody>
         </table>
+
+        <!-- Pagination -->
+        <?php if ($total_pages > 1): ?>
+            <div class="tablenav" style="margin-top: 15px;">
+                <div class="tablenav-pages">
+                    <span class="displaying-num">
+                        <?php printf(__('%s items', 'newbook-api-cache'), number_format_i18n($log_count)); ?>
+                    </span>
+                    <span class="pagination-links">
+                        <?php
+                        $base_url = add_query_arg(array(
+                            'page' => 'newbook-cache-settings',
+                            'tab' => 'logs',
+                            'filter_level' => $filter_level,
+                            'search' => $search
+                        ), admin_url('options-general.php'));
+
+                        // First page
+                        if ($paged > 1) {
+                            echo '<a class="first-page button" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '"><span aria-hidden="true">«</span></a> ';
+                            echo '<a class="prev-page button" href="' . esc_url(add_query_arg('paged', $paged - 1, $base_url)) . '"><span aria-hidden="true">‹</span></a> ';
+                        } else {
+                            echo '<span class="tablenav-pages-navspan button disabled" aria-hidden="true">«</span> ';
+                            echo '<span class="tablenav-pages-navspan button disabled" aria-hidden="true">‹</span> ';
+                        }
+
+                        echo '<span class="paging-input">';
+                        echo '<span class="tablenav-paging-text">';
+                        printf(__('%1$s of %2$s', 'newbook-api-cache'), number_format_i18n($paged), number_format_i18n($total_pages));
+                        echo '</span>';
+                        echo '</span> ';
+
+                        // Last page
+                        if ($paged < $total_pages) {
+                            echo '<a class="next-page button" href="' . esc_url(add_query_arg('paged', $paged + 1, $base_url)) . '"><span aria-hidden="true">›</span></a> ';
+                            echo '<a class="last-page button" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '"><span aria-hidden="true">»</span></a>';
+                        } else {
+                            echo '<span class="tablenav-pages-navspan button disabled" aria-hidden="true">›</span> ';
+                            echo '<span class="tablenav-pages-navspan button disabled" aria-hidden="true">»</span>';
+                        }
+                        ?>
+                    </span>
+                </div>
+            </div>
+        <?php endif; ?>
         <?php
     }
 

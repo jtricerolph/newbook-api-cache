@@ -110,6 +110,7 @@ class NewBook_Cache_Logger {
 
         $defaults = array(
             'level' => null,
+            'search' => null,
             'limit' => 50,
             'offset' => 0,
             'order' => 'DESC'
@@ -117,9 +118,19 @@ class NewBook_Cache_Logger {
 
         $args = wp_parse_args($args, $defaults);
 
-        $where = '';
+        $where_clauses = array();
+
         if ($args['level'] !== null) {
-            $where = $wpdb->prepare("WHERE level = %d", $args['level']);
+            $where_clauses[] = $wpdb->prepare("level = %d", $args['level']);
+        }
+
+        if (!empty($args['search'])) {
+            $where_clauses[] = $wpdb->prepare("message LIKE %s", '%' . $wpdb->esc_like($args['search']) . '%');
+        }
+
+        $where = '';
+        if (!empty($where_clauses)) {
+            $where = 'WHERE ' . implode(' AND ', $where_clauses);
         }
 
         $sql = $wpdb->prepare(
@@ -145,20 +156,35 @@ class NewBook_Cache_Logger {
     /**
      * Get log count
      *
-     * @param int|null $level Filter by level
+     * @param array $args Query arguments (level, search)
      * @return int Number of log entries
      */
-    public static function get_log_count($level = null) {
+    public static function get_log_count($args = array()) {
         global $wpdb;
         $table = $wpdb->prefix . 'newbook_cache_logs';
 
-        if ($level !== null) {
-            return (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$table} WHERE level = %d",
-                $level
-            ));
+        $defaults = array(
+            'level' => null,
+            'search' => null
+        );
+
+        $args = wp_parse_args($args, $defaults);
+
+        $where_clauses = array();
+
+        if ($args['level'] !== null) {
+            $where_clauses[] = $wpdb->prepare("level = %d", $args['level']);
         }
 
-        return (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+        if (!empty($args['search'])) {
+            $where_clauses[] = $wpdb->prepare("message LIKE %s", '%' . $wpdb->esc_like($args['search']) . '%');
+        }
+
+        $where = '';
+        if (!empty($where_clauses)) {
+            $where = 'WHERE ' . implode(' AND ', $where_clauses);
+        }
+
+        return (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table} {$where}");
     }
 }
