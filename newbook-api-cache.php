@@ -50,6 +50,9 @@ function newbook_cache_activate() {
     if (get_option('newbook_cache_enabled') === false) {
         update_option('newbook_cache_enabled', true);
     }
+    if (get_option('newbook_cache_sync_interval') === false) {
+        update_option('newbook_cache_sync_interval', 20);
+    }
     if (get_option('newbook_cache_log_level') === false) {
         update_option('newbook_cache_log_level', NewBook_Cache_Logger::INFO);
     }
@@ -146,14 +149,16 @@ function newbook_cache_create_tables() {
  * Schedule cron jobs
  */
 function newbook_cache_schedule_cron() {
+    $sync_interval = get_option('newbook_cache_sync_interval', 20);
+
     // Full refresh: Daily at 3 AM
     if (!wp_next_scheduled('newbook_cache_full_refresh')) {
         wp_schedule_event(strtotime('tomorrow 3:00 AM'), 'daily', 'newbook_cache_full_refresh');
     }
 
-    // Incremental sync: Every 20 seconds
+    // Incremental sync: Uses configurable interval
     if (!wp_next_scheduled('newbook_cache_incremental_sync')) {
-        wp_schedule_event(time(), 'newbook_cache_20_seconds', 'newbook_cache_incremental_sync');
+        wp_schedule_event(time(), 'newbook_cache_incremental_sync', 'newbook_cache_incremental_sync');
     }
 
     // Cleanup: Daily at 4 AM
@@ -176,9 +181,11 @@ function newbook_cache_unschedule_cron() {
  */
 add_filter('cron_schedules', 'newbook_cache_cron_intervals');
 function newbook_cache_cron_intervals($schedules) {
-    $schedules['newbook_cache_20_seconds'] = array(
-        'interval' => 20,
-        'display' => __('Every 20 Seconds', 'newbook-api-cache')
+    $sync_interval = get_option('newbook_cache_sync_interval', 20);
+
+    $schedules['newbook_cache_incremental_sync'] = array(
+        'interval' => $sync_interval,
+        'display' => sprintf(__('Every %d Seconds', 'newbook-api-cache'), $sync_interval)
     );
     return $schedules;
 }
@@ -206,7 +213,8 @@ function newbook_cache_init() {
         new NewBook_Cache_Admin_Settings();
     }
 
-    NewBook_Cache_Logger::log('NewBook API Cache initialized', NewBook_Cache_Logger::INFO);
+    // Only log initialization at DEBUG level to avoid spamming logs
+    NewBook_Cache_Logger::log('NewBook API Cache initialized', NewBook_Cache_Logger::DEBUG);
 }
 
 /**

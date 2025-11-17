@@ -26,6 +26,9 @@ class NewBook_Cache_Admin_Settings {
         add_action('admin_post_newbook_cache_generate_api_key', array($this, 'handle_generate_api_key'));
         add_action('admin_post_newbook_cache_revoke_api_key', array($this, 'handle_revoke_api_key'));
         add_action('admin_post_newbook_cache_test_connection', array($this, 'handle_test_connection'));
+
+        // Reschedule cron when sync interval changes
+        add_action('update_option_newbook_cache_sync_interval', array($this, 'reschedule_sync_on_interval_change'), 10, 2);
     }
 
     /**
@@ -53,6 +56,7 @@ class NewBook_Cache_Admin_Settings {
 
         // Cache Settings (separate group)
         register_setting('newbook_cache_cache_settings', 'newbook_cache_enabled', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_sync_interval', array('sanitize_callback' => 'absint', 'default' => 20));
         register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_future', array('sanitize_callback' => 'absint', 'default' => 365));
         register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_past', array('sanitize_callback' => 'absint', 'default' => 30));
         register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_cancelled', array('sanitize_callback' => 'absint', 'default' => 30));
@@ -308,6 +312,7 @@ class NewBook_Cache_Admin_Settings {
      */
     private function render_cache_tab($stats) {
         $enabled = get_option('newbook_cache_enabled', true);
+        $sync_interval = get_option('newbook_cache_sync_interval', 20);
         $allow_unknown_relay = get_option('newbook_cache_allow_unknown_relay', false);
         $retention_future = get_option('newbook_cache_retention_future', 365);
         $retention_past = get_option('newbook_cache_retention_past', 30);
@@ -328,6 +333,18 @@ class NewBook_Cache_Admin_Settings {
                             <input type="checkbox" name="newbook_cache_enabled" value="1" <?php checked($enabled, true); ?> />
                             <?php _e('Enable NewBook API caching', 'newbook-api-cache'); ?>
                         </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Incremental Sync Interval', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <input type="number" name="newbook_cache_sync_interval" value="<?php echo esc_attr($sync_interval); ?>" min="10" max="300" class="small-text" />
+                        <?php _e('seconds', 'newbook-api-cache'); ?>
+                        <p class="description">
+                            <?php _e('How often to check NewBook API for booking updates (10-300 seconds).', 'newbook-api-cache'); ?>
+                            <br />
+                            <strong><?php _e('Recommended:', 'newbook-api-cache'); ?></strong> <?php _e('20-60 seconds for most properties. Lower values increase server load.', 'newbook-api-cache'); ?>
+                        </p>
                     </td>
                 </tr>
                 <tr>
@@ -1133,6 +1150,27 @@ class NewBook_Cache_Admin_Settings {
             return sprintf(__('%d hours ago', 'newbook-api-cache'), round($diff / 3600));
         } else {
             return sprintf(__('%d days ago', 'newbook-api-cache'), round($diff / 86400));
+        }
+    }
+
+    /**
+     * Reschedule incremental sync when interval setting changes
+     *
+     * @param int $old_value Old interval value
+     * @param int $new_value New interval value
+     */
+    public function reschedule_sync_on_interval_change($old_value, $new_value) {
+        if ($old_value !== $new_value) {
+            // Unschedule existing cron job
+            wp_clear_scheduled_hook('newbook_cache_incremental_sync');
+
+            // Reschedule with new interval
+            wp_schedule_event(time(), 'newbook_cache_incremental_sync', 'newbook_cache_incremental_sync');
+
+            NewBook_Cache_Logger::log('Incremental sync rescheduled', NewBook_Cache_Logger::INFO, array(
+                'old_interval' => $old_value . ' seconds',
+                'new_interval' => $new_value . ' seconds'
+            ));
         }
     }
 }
