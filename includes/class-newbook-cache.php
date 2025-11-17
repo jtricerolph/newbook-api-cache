@@ -619,7 +619,11 @@ class NewBook_API_Cache {
         $total_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
         $hot_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE cache_type = 'hot'");
         $historical_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE cache_type = 'historical'");
-        $cancelled_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status = 'cancelled'");
+
+        // Status breakdown
+        $active_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status NOT IN ('cancelled', 'checked_out', 'no_show')");
+        $checked_out = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status = 'checked_out'");
+        $cancelled = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status = 'cancelled'");
 
         $db_size = $wpdb->get_var("
             SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2)
@@ -632,7 +636,9 @@ class NewBook_API_Cache {
             'total_bookings' => (int) $total_bookings,
             'hot_bookings' => (int) $hot_bookings,
             'historical_bookings' => (int) $historical_bookings,
-            'cancelled_bookings' => (int) $cancelled_bookings,
+            'active_bookings' => (int) $active_bookings,
+            'checked_out' => (int) $checked_out,
+            'cancelled' => (int) $cancelled,
             'database_size_mb' => (float) $db_size
         );
     }
