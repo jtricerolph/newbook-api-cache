@@ -75,18 +75,40 @@ class NewBook_API_Client {
 
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
+        $response_headers = wp_remote_retrieve_headers($response);
 
         // Handle non-200 response
         if ($response_code !== 200) {
+            // Try to parse error response
+            $error_data = json_decode($response_body, true);
+            $error_message = "API returned HTTP {$response_code}";
+
+            // Extract error message from various possible fields
+            if ($error_data && is_array($error_data)) {
+                if (isset($error_data['message'])) {
+                    $error_message = $error_data['message'];
+                } elseif (isset($error_data['error'])) {
+                    $error_message = $error_data['error'];
+                } elseif (isset($error_data['error_message'])) {
+                    $error_message = $error_data['error_message'];
+                }
+            }
+
             NewBook_Cache_Logger::log("API returned HTTP {$response_code}", NewBook_Cache_Logger::ERROR, array(
                 'action' => $action,
-                'response_code' => $response_code
+                'response_code' => $response_code,
+                'response_body' => $response_body,
+                'response_headers' => $response_headers->getAll(),
+                'error_message' => $error_message
             ));
 
             return array(
                 'data' => array(),
                 'success' => false,
-                'message' => "API returned HTTP {$response_code}"
+                'message' => $error_message,
+                'http_code' => $response_code,
+                'raw_response' => $response_body,
+                'headers' => $response_headers->getAll()
             );
         }
 

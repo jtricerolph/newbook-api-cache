@@ -201,6 +201,7 @@ class NewBook_Cache_Admin_Settings {
                     $error_msg = isset($_GET['test_error']) ? urldecode(sanitize_text_field($_GET['test_error'])) : 'Precondition failed';
                     $test_region = isset($_GET['region']) ? sanitize_text_field($_GET['region']) : $region;
                     $raw_response = isset($_GET['raw_response']) ? urldecode($_GET['raw_response']) : '';
+                    $debug_info = isset($_GET['debug_info']) ? json_decode(urldecode($_GET['debug_info']), true) : array();
                     ?>
                     <div class="notice notice-error is-dismissible">
                         <p>
@@ -219,8 +220,31 @@ class NewBook_Cache_Admin_Settings {
                             <?php _e('Try changing the Region setting to match where your NewBook account is located (Australia, New Zealand, Europe, or United States).', 'newbook-api-cache'); ?>
                         </p>
                         <p><strong><?php _e('HTTP Status:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($status_code); ?></p>
-                        <p><strong><?php _e('NewBook Error Message:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($error_msg); ?></p>
-                        <?php if (!empty($raw_response)): ?>
+                        <p><strong><?php _e('Error Message:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($error_msg); ?></p>
+
+                        <?php if (!empty($debug_info)): ?>
+                            <details style="margin-top: 10px;" open>
+                                <summary style="cursor: pointer; font-weight: 600; font-size: 14px; color: #d63638;"><?php _e('Show Complete Debug Information', 'newbook-api-cache'); ?></summary>
+                                <div style="margin-top: 10px; padding: 15px; background: #fff; border: 1px solid #c3c4c7; border-radius: 4px;">
+                                    <table style="width: 100%; border-collapse: collapse;">
+                                        <?php foreach ($debug_info as $key => $value): ?>
+                                            <tr style="border-bottom: 1px solid #f0f0f1;">
+                                                <td style="padding: 8px; font-weight: 600; vertical-align: top; width: 200px;"><?php echo esc_html($key); ?>:</td>
+                                                <td style="padding: 8px; font-family: monospace; font-size: 12px; word-break: break-all;">
+                                                    <?php
+                                                    if (strlen($value) > 200 && strpos($key, 'Header') === false) {
+                                                        echo '<pre style="margin: 0; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">' . esc_html($value) . '</pre>';
+                                                    } else {
+                                                        echo esc_html($value);
+                                                    }
+                                                    ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </table>
+                                </div>
+                            </details>
+                        <?php elseif (!empty($raw_response)): ?>
                             <details style="margin-top: 10px;">
                                 <summary style="cursor: pointer; font-weight: 600;"><?php _e('Show Raw API Response', 'newbook-api-cache'); ?></summary>
                                 <pre style="margin-top: 10px; padding: 10px; background: #f0f0f1; overflow-x: auto; font-size: 12px;"><?php echo esc_html($raw_response); ?></pre>
@@ -1077,6 +1101,7 @@ class NewBook_Cache_Admin_Settings {
         // Check response code
         $status_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
+        $response_headers = wp_remote_retrieve_headers($response);
         $data = json_decode($response_body, true);
 
         // Log the test result
@@ -1084,6 +1109,8 @@ class NewBook_Cache_Admin_Settings {
             'status_code' => $status_code,
             'response_time_ms' => $response_time,
             'region' => $region,
+            'response_body' => $response_body,
+            'response_headers' => is_object($response_headers) ? $response_headers->getAll() : $response_headers,
             'success' => ($status_code === 200 && isset($data['success']) && $data['success'])
         ));
 
@@ -1123,12 +1150,31 @@ class NewBook_Cache_Admin_Settings {
                 $error_msg = 'Precondition failed - check region and API key match';
             }
 
+            // Build detailed debug info
+            $debug_info = array(
+                'HTTP Status' => $status_code,
+                'Region' => strtoupper($region),
+                'Response Body' => $response_body ?: '(empty)',
+                'Decoded Data' => $data ? json_encode($data, JSON_PRETTY_PRINT) : '(no JSON)',
+            );
+
+            // Add response headers
+            if (is_object($response_headers)) {
+                $headers_array = $response_headers->getAll();
+                foreach ($headers_array as $key => $value) {
+                    $debug_info['Header: ' . $key] = is_array($value) ? implode(', ', $value) : $value;
+                }
+            }
+
             NewBook_Cache_Logger::log('Test connection HTTP 412: Region/API key mismatch', NewBook_Cache_Logger::WARNING, array(
                 'status_code' => $status_code,
                 'region' => $region,
                 'response_body' => $response_body,
-                'decoded_data' => $data
+                'response_headers' => is_object($response_headers) ? $response_headers->getAll() : $response_headers,
+                'decoded_data' => $data,
+                'debug_info' => $debug_info
             ));
+
             wp_redirect(add_query_arg(array(
                 'page' => 'newbook-cache-settings',
                 'tab' => 'credentials',
@@ -1136,7 +1182,8 @@ class NewBook_Cache_Admin_Settings {
                 'status_code' => $status_code,
                 'region' => $region,
                 'test_error' => urlencode($error_msg),
-                'raw_response' => urlencode(substr($response_body, 0, 500)) // First 500 chars
+                'raw_response' => urlencode($response_body), // Full response
+                'debug_info' => urlencode(json_encode($debug_info))
             ), admin_url('options-general.php')));
             exit;
         } else {
