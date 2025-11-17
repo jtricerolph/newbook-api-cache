@@ -163,7 +163,24 @@ class NewBook_API_Cache {
             'list_type' => $list_type
         ));
 
-        return $this->relay_to_newbook_api('bookings_list', $data);
+        // Fetch from API
+        $response = $this->relay_to_newbook_api('bookings_list', $data);
+
+        // Store fetched bookings in cache for future requests
+        if ($response && isset($response['data']) && $response['success']) {
+            $stored_count = 0;
+            foreach ($response['data'] as $booking) {
+                if ($this->store_booking($booking)) {
+                    $stored_count++;
+                }
+            }
+
+            if ($stored_count > 0) {
+                NewBook_Cache_Logger::log("Stored {$stored_count} bookings from API response in cache", NewBook_Cache_Logger::INFO);
+            }
+        }
+
+        return $response;
     }
 
     /**
@@ -196,7 +213,18 @@ class NewBook_API_Cache {
 
         // Cache miss
         NewBook_Cache_Logger::log("bookings_get: CACHE MISS - booking #{$booking_id}", NewBook_Cache_Logger::INFO);
-        return $this->relay_to_newbook_api('bookings_get', $data);
+
+        // Fetch from API
+        $response = $this->relay_to_newbook_api('bookings_get', $data);
+
+        // Store fetched booking in cache for future requests
+        if ($response && isset($response['data']) && $response['success']) {
+            if ($this->store_booking($response['data'])) {
+                NewBook_Cache_Logger::log("Stored booking #{$booking_id} from API response in cache", NewBook_Cache_Logger::DEBUG);
+            }
+        }
+
+        return $response;
     }
 
     /**
