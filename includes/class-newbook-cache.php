@@ -341,7 +341,7 @@ class NewBook_API_Cache {
             );
 
             if ($list_type === 'staying') {
-                $where_clause .= " AND booking_status NOT IN ('cancelled', 'no_show')";
+                $where_clause .= " AND booking_status NOT IN ('cancelled', 'departed', 'no_show')";
             }
 
             NewBook_Cache_Logger::log("Cache query using arrival/departure dates for list_type={$list_type}", NewBook_Cache_Logger::DEBUG);
@@ -640,8 +640,9 @@ class NewBook_API_Cache {
         $historical_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE cache_type = 'historical'");
 
         // Status breakdown
-        $active_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status NOT IN ('cancelled', 'checked_out', 'no_show', 'checked-out')");
-        $checked_out = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status IN ('checked_out', 'checked-out')");
+        // Note: NewBook uses 'departed' for checked-out bookings, not 'checked_out'
+        $active_bookings = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status NOT IN ('cancelled', 'departed', 'no_show')");
+        $checked_out = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status = 'departed'");
         $cancelled = $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE booking_status = 'cancelled'");
 
         // Get all distinct statuses for debugging
@@ -701,7 +702,7 @@ class NewBook_API_Cache {
                 COUNT(*) as total_bookings,
                 MAX(last_updated) as last_cache_update,
                 SUM(CASE WHEN booking_status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
-                SUM(CASE WHEN booking_status NOT IN ('cancelled', 'no_show') THEN 1 ELSE 0 END) as active_count,
+                SUM(CASE WHEN booking_status NOT IN ('cancelled', 'departed', 'no_show') THEN 1 ELSE 0 END) as active_count,
                 MIN(arrival_date) as earliest_arrival,
                 MAX(departure_date) as latest_departure
             FROM {$table}
