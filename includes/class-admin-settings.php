@@ -22,10 +22,15 @@ class NewBook_Cache_Admin_Settings {
         // Handle manual actions
         add_action('admin_post_newbook_cache_clear_cache', array($this, 'handle_clear_cache'));
         add_action('admin_post_newbook_cache_full_refresh', array($this, 'handle_full_refresh'));
+        add_action('admin_post_newbook_cache_incremental_sync', array($this, 'handle_incremental_sync'));
+        add_action('admin_post_newbook_cache_reschedule_cron', array($this, 'handle_reschedule_cron'));
         add_action('admin_post_newbook_cache_clear_logs', array($this, 'handle_clear_logs'));
         add_action('admin_post_newbook_cache_generate_api_key', array($this, 'handle_generate_api_key'));
         add_action('admin_post_newbook_cache_revoke_api_key', array($this, 'handle_revoke_api_key'));
         add_action('admin_post_newbook_cache_test_connection', array($this, 'handle_test_connection'));
+
+        // AJAX handlers
+        add_action('wp_ajax_newbook_cache_refresh_logs', array($this, 'ajax_refresh_logs'));
 
         // Reschedule cron when sync interval changes
         add_action('update_option_newbook_cache_sync_interval', array($this, 'reschedule_sync_on_interval_change'), 10, 2);
@@ -82,6 +87,47 @@ class NewBook_Cache_Admin_Settings {
         }
 
         wp_enqueue_style('newbook-cache-admin', NEWBOOK_CACHE_PLUGIN_URL . 'assets/css/admin.css', array(), NEWBOOK_CACHE_VERSION);
+
+        // Enqueue JavaScript for AJAX log refresh
+        $inline_js = "
+        jQuery(document).ready(function($) {
+            $('#newbook-cache-refresh-logs').on('click', function(e) {
+                e.preventDefault();
+                var button = $(this);
+                var originalText = button.text();
+
+                // Disable button and show loading state
+                button.prop('disabled', true).text('Refreshing...');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'newbook_cache_refresh_logs',
+                        nonce: '" . wp_create_nonce('newbook_cache_refresh_logs') . "'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Update the logs table
+                            $('#newbook-cache-logs-tbody').html(response.data.html);
+                            // Update the count in the header
+                            $('#newbook-cache-logs-count').text(response.data.count);
+                        } else {
+                            alert('Failed to refresh logs: ' + (response.data.message || 'Unknown error'));
+                        }
+                    },
+                    error: function() {
+                        alert('Failed to refresh logs. Please try again.');
+                    },
+                    complete: function() {
+                        // Re-enable button and restore text
+                        button.prop('disabled', false).text(originalText);
+                    }
+                });
+            });
+        });
+        ";
+        wp_add_inline_script('jquery', $inline_js);
     }
 
     /**
@@ -104,6 +150,9 @@ class NewBook_Cache_Admin_Settings {
                 <a href="?page=newbook-cache-settings&tab=cache" class="nav-tab <?php echo $active_tab === 'cache' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('Cache Settings', 'newbook-api-cache'); ?>
                 </a>
+                <a href="?page=newbook-cache-settings&tab=status" class="nav-tab <?php echo $active_tab === 'status' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('Status & Diagnostics', 'newbook-api-cache'); ?>
+                </a>
                 <a href="?page=newbook-cache-settings&tab=logs" class="nav-tab <?php echo $active_tab === 'logs' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('Logging & Debug', 'newbook-api-cache'); ?>
                 </a>
@@ -122,6 +171,9 @@ class NewBook_Cache_Admin_Settings {
                     break;
                 case 'cache':
                     $this->render_cache_tab($stats);
+                    break;
+                case 'status':
+                    $this->render_status_tab($stats);
                     break;
                 case 'logs':
                     $this->render_logs_tab();
@@ -497,6 +549,315 @@ class NewBook_Cache_Admin_Settings {
     }
 
     /**
+     * Render Status & Diagnostics tab
+     */
+    private function render_status_tab($stats) {
+        // Display action messages
+        if (isset($_GET['message'])) {
+            $message = sanitize_text_field($_GET['message']);
+            switch ($message) {
+                case 'refresh_triggered':
+                    ?>
+                    <div class="notice notice-success is-dismissible">
+                        <p><?php _e('Full refresh has been triggered and is running in the background. Check the logs for progress.', 'newbook-api-cache'); ?></p>
+                    </div>
+                    <?php
+                    break;
+                case 'sync_triggered':
+                    ?>
+                    <div class="notice notice-success is-dismissible">
+                        <p><?php _e('Incremental sync has been triggered. Check the logs and last execution time below.', 'newbook-api-cache'); ?></p>
+                    </div>
+                    <?php
+                    break;
+                case 'cron_rescheduled':
+                    ?>
+                    <div class="notice notice-success is-dismissible">
+                        <p><?php _e('All cron jobs have been rescheduled successfully. Check the schedule below to verify.', 'newbook-api-cache'); ?></p>
+                    </div>
+                    <?php
+                    break;
+            }
+        }
+
+        // Get cron information
+        $cron_jobs = _get_cron_array();
+        $full_refresh_next = wp_next_scheduled('newbook_cache_full_refresh');
+        $incremental_sync_next = wp_next_scheduled('newbook_cache_incremental_sync');
+        $cleanup_next = wp_next_scheduled('newbook_cache_cleanup');
+
+        // Get last execution times
+        $last_full_refresh = get_option('newbook_cache_last_full_refresh', 'Never');
+        $last_incremental_sync = get_option('newbook_cache_last_incremental_sync', 'Never');
+        $last_cleanup = get_option('newbook_cache_last_cleanup', 'Never');
+
+        // Check if WP-Cron is disabled
+        $wp_cron_disabled = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
+
+        // Calculate time since last sync
+        $time_since_last_sync = 'Unknown';
+        $sync_warning = false;
+        if ($last_incremental_sync !== 'Never') {
+            $last_sync_time = strtotime($last_incremental_sync);
+            $time_diff = time() - $last_sync_time;
+            $time_since_last_sync = $this->format_time_diff($time_diff);
+
+            // Warn if incremental sync hasn't run in 5 minutes
+            $sync_interval = get_option('newbook_cache_sync_interval', 20);
+            if ($time_diff > 300) { // 5 minutes
+                $sync_warning = true;
+            }
+        }
+
+        ?>
+        <h2><?php _e('System Status', 'newbook-api-cache'); ?></h2>
+
+        <!-- WordPress Cron Status -->
+        <table class="widefat" style="margin-bottom: 20px;">
+            <thead>
+                <tr>
+                    <th colspan="2" style="background: #f0f0f1; padding: 10px;">
+                        <strong><?php _e('WordPress Cron System', 'newbook-api-cache'); ?></strong>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="width: 300px;"><strong><?php _e('WP-Cron Status:', 'newbook-api-cache'); ?></strong></td>
+                    <td>
+                        <?php if ($wp_cron_disabled): ?>
+                            <span style="color: #d63638;">⚠ <?php _e('Disabled', 'newbook-api-cache'); ?></span>
+                            <p class="description">
+                                <?php _e('DISABLE_WP_CRON is set to true. You must set up a system cron job to trigger wp-cron.php for automated syncs to work.', 'newbook-api-cache'); ?>
+                                <br>
+                                <?php _e('Add this to your server crontab:', 'newbook-api-cache'); ?>
+                                <br>
+                                <code>* * * * * curl -s <?php echo site_url('wp-cron.php'); ?>?doing_wp_cron >/dev/null 2>&1</code>
+                            </p>
+                        <?php else: ?>
+                            <span style="color: #46b450;">✓ <?php _e('Enabled', 'newbook-api-cache'); ?></span>
+                            <p class="description">
+                                <?php _e('WordPress cron runs when pages are visited. For better reliability, consider setting up a system cron job.', 'newbook-api-cache'); ?>
+                            </p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong><?php _e('Total Scheduled Jobs:', 'newbook-api-cache'); ?></strong></td>
+                    <td><?php echo count($cron_jobs); ?> <?php _e('total WordPress cron events', 'newbook-api-cache'); ?></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Sync Job Status -->
+        <h3><?php _e('Sync Jobs Status', 'newbook-api-cache'); ?></h3>
+
+        <?php if ($sync_warning): ?>
+            <div class="notice notice-warning">
+                <p>
+                    <strong><?php _e('Warning: Incremental Sync Not Running', 'newbook-api-cache'); ?></strong>
+                </p>
+                <p>
+                    <?php printf(__('The last incremental sync was %s ago. Expected interval is %d seconds.', 'newbook-api-cache'), $time_since_last_sync, $sync_interval); ?>
+                </p>
+                <p>
+                    <strong><?php _e('Possible causes:', 'newbook-api-cache'); ?></strong>
+                </p>
+                <ul style="margin-left: 20px;">
+                    <li><?php _e('No traffic to your site (WP-Cron only runs on page loads)', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('System cron job not configured', 'newbook-api-cache'); ?></li>
+                    <li><?php _e('Plugin deactivated or caching disabled', 'newbook-api-cache'); ?></li>
+                </ul>
+                <p>
+                    <?php _e('Try clicking "Force Incremental Sync Now" below to test if the sync is working.', 'newbook-api-cache'); ?>
+                </p>
+            </div>
+        <?php endif; ?>
+
+        <table class="widefat">
+            <thead>
+                <tr>
+                    <th><?php _e('Job', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Status', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Next Scheduled', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Last Executed', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Interval', 'newbook-api-cache'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Incremental Sync -->
+                <tr>
+                    <td><strong><?php _e('Incremental Sync', 'newbook-api-cache'); ?></strong></td>
+                    <td>
+                        <?php if ($incremental_sync_next): ?>
+                            <span style="color: #46b450;">✓ <?php _e('Scheduled', 'newbook-api-cache'); ?></span>
+                        <?php else: ?>
+                            <span style="color: #d63638;">✗ <?php _e('Not Scheduled', 'newbook-api-cache'); ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($incremental_sync_next): ?>
+                            <?php echo date('Y-m-d H:i:s', $incremental_sync_next); ?>
+                            <br>
+                            <span style="color: #666; font-size: 11px;">(<?php echo human_time_diff($incremental_sync_next); ?>)</span>
+                        <?php else: ?>
+                            <span style="color: #d63638;"><?php _e('Not scheduled', 'newbook-api-cache'); ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php echo esc_html($last_incremental_sync); ?>
+                        <?php if ($last_incremental_sync !== 'Never'): ?>
+                            <br>
+                            <span style="color: #666; font-size: 11px;">(<?php echo $this->time_ago($last_incremental_sync); ?>)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?php echo get_option('newbook_cache_sync_interval', 20); ?> <?php _e('seconds', 'newbook-api-cache'); ?></td>
+                </tr>
+
+                <!-- Full Refresh -->
+                <tr>
+                    <td><strong><?php _e('Full Refresh', 'newbook-api-cache'); ?></strong></td>
+                    <td>
+                        <?php if ($full_refresh_next): ?>
+                            <span style="color: #46b450;">✓ <?php _e('Scheduled', 'newbook-api-cache'); ?></span>
+                        <?php else: ?>
+                            <span style="color: #d63638;">✗ <?php _e('Not Scheduled', 'newbook-api-cache'); ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($full_refresh_next): ?>
+                            <?php echo date('Y-m-d H:i:s', $full_refresh_next); ?>
+                            <br>
+                            <span style="color: #666; font-size: 11px;">(<?php echo human_time_diff($full_refresh_next); ?>)</span>
+                        <?php else: ?>
+                            <span style="color: #d63638;"><?php _e('Not scheduled', 'newbook-api-cache'); ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php echo esc_html($last_full_refresh); ?>
+                        <?php if ($last_full_refresh !== 'Never'): ?>
+                            <br>
+                            <span style="color: #666; font-size: 11px;">(<?php echo $this->time_ago($last_full_refresh); ?>)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?php _e('Daily at 3:00 AM', 'newbook-api-cache'); ?></td>
+                </tr>
+
+                <!-- Cleanup -->
+                <tr>
+                    <td><strong><?php _e('Cleanup', 'newbook-api-cache'); ?></strong></td>
+                    <td>
+                        <?php if ($cleanup_next): ?>
+                            <span style="color: #46b450;">✓ <?php _e('Scheduled', 'newbook-api-cache'); ?></span>
+                        <?php else: ?>
+                            <span style="color: #d63638;">✗ <?php _e('Not Scheduled', 'newbook-api-cache'); ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($cleanup_next): ?>
+                            <?php echo date('Y-m-d H:i:s', $cleanup_next); ?>
+                            <br>
+                            <span style="color: #666; font-size: 11px;">(<?php echo human_time_diff($cleanup_next); ?>)</span>
+                        <?php else: ?>
+                            <span style="color: #d63638;"><?php _e('Not scheduled', 'newbook-api-cache'); ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php echo esc_html($last_cleanup); ?>
+                        <?php if ($last_cleanup !== 'Never'): ?>
+                            <br>
+                            <span style="color: #666; font-size: 11px;">(<?php echo $this->time_ago($last_cleanup); ?>)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?php _e('Daily at 4:00 AM', 'newbook-api-cache'); ?></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Manual Triggers -->
+        <h3 style="margin-top: 30px;"><?php _e('Manual Operations', 'newbook-api-cache'); ?></h3>
+        <p class="description">
+            <?php _e('Use these buttons to manually trigger sync operations for testing. This is useful for diagnosing cron issues.', 'newbook-api-cache'); ?>
+        </p>
+
+        <p class="submit">
+            <a href="<?php echo wp_nonce_url(admin_url('admin-post.php?action=newbook_cache_full_refresh'), 'newbook_cache_full_refresh'); ?>" class="button button-primary">
+                <?php _e('Force Full Refresh Now', 'newbook-api-cache'); ?>
+            </a>
+
+            <a href="<?php echo wp_nonce_url(admin_url('admin-post.php?action=newbook_cache_incremental_sync'), 'newbook_cache_incremental_sync'); ?>" class="button">
+                <?php _e('Force Incremental Sync Now', 'newbook-api-cache'); ?>
+            </a>
+
+            <a href="<?php echo admin_url('admin-post.php?action=newbook_cache_reschedule_cron'); ?>" class="button">
+                <?php _e('Reschedule All Cron Jobs', 'newbook-api-cache'); ?>
+            </a>
+        </p>
+
+        <!-- Cache Statistics -->
+        <h3 style="margin-top: 30px;"><?php _e('Cache Statistics', 'newbook-api-cache'); ?></h3>
+        <table class="widefat">
+            <tr>
+                <td style="width: 300px;"><strong><?php _e('Total Bookings Cached:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo number_format($stats['total_bookings'] ?? 0); ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Active Bookings:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo number_format($stats['active_bookings'] ?? 0); ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Checked Out:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo number_format($stats['checked_out'] ?? 0); ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Cancelled:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo number_format($stats['cancelled'] ?? 0); ?></td>
+            </tr>
+        </table>
+
+        <!-- System Information -->
+        <h3 style="margin-top: 30px;"><?php _e('System Information', 'newbook-api-cache'); ?></h3>
+        <table class="widefat">
+            <tr>
+                <td style="width: 300px;"><strong><?php _e('WordPress Version:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo get_bloginfo('version'); ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('PHP Version:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo PHP_VERSION; ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Plugin Version:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo NEWBOOK_CACHE_VERSION; ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Server Time:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo current_time('Y-m-d H:i:s'); ?></td>
+            </tr>
+            <tr>
+                <td><strong><?php _e('Timezone:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo wp_timezone_string(); ?></td>
+            </tr>
+        </table>
+        <?php
+    }
+
+    /**
+     * Helper function to format time difference
+     */
+    private function format_time_diff($seconds) {
+        if ($seconds < 60) {
+            return sprintf(__('%d seconds', 'newbook-api-cache'), $seconds);
+        } elseif ($seconds < 3600) {
+            return sprintf(__('%d minutes', 'newbook-api-cache'), round($seconds / 60));
+        } elseif ($seconds < 86400) {
+            return sprintf(__('%d hours', 'newbook-api-cache'), round($seconds / 3600));
+        } else {
+            return sprintf(__('%d days', 'newbook-api-cache'), round($seconds / 86400));
+        }
+    }
+
+    /**
      * Render Logging & Debug tab
      */
     private function render_logs_tab() {
@@ -609,9 +970,12 @@ class NewBook_Cache_Admin_Settings {
             <?php submit_button(); ?>
         </form>
 
-        <h3><?php echo sprintf(__('Recent Log Entries (%d total)', 'newbook-api-cache'), $log_count); ?></h3>
+        <h3><?php _e('Recent Log Entries', 'newbook-api-cache'); ?> (<span id="newbook-cache-logs-count"><?php echo $log_count; ?></span> <?php _e('total', 'newbook-api-cache'); ?>)</h3>
 
         <p>
+            <button type="button" id="newbook-cache-refresh-logs" class="button">
+                <?php _e('Refresh Logs', 'newbook-api-cache'); ?>
+            </button>
             <a href="<?php echo wp_nonce_url(admin_url('admin-post.php?action=newbook_cache_clear_logs'), 'newbook_cache_clear_logs'); ?>" class="button" onclick="return confirm('<?php _e('Are you sure? This will clear all logs.', 'newbook-api-cache'); ?>');">
                 <?php _e('Clear Logs', 'newbook-api-cache'); ?>
             </a>
@@ -626,33 +990,8 @@ class NewBook_Cache_Admin_Settings {
                     <th><?php _e('Memory', 'newbook-api-cache'); ?></th>
                 </tr>
             </thead>
-            <tbody>
-                <?php if (empty($logs)): ?>
-                    <tr>
-                        <td colspan="4"><?php _e('No logs found', 'newbook-api-cache'); ?></td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($logs as $log): ?>
-                        <tr>
-                            <td style="white-space: nowrap;"><?php echo esc_html($log->timestamp); ?></td>
-                            <td>
-                                <span class="log-level log-level-<?php echo esc_attr(strtolower(NewBook_Cache_Logger::get_level_name($log->level))); ?>">
-                                    <?php echo esc_html(NewBook_Cache_Logger::get_level_name($log->level)); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php echo esc_html($log->message); ?>
-                                <?php if (!empty($log->context)): ?>
-                                    <details style="margin-top: 5px;">
-                                        <summary style="cursor: pointer; font-size: 11px; color: #666;"><?php _e('Show Details', 'newbook-api-cache'); ?></summary>
-                                        <pre style="margin-top: 5px; padding: 8px; background: #f9f9f9; overflow-x: auto; font-size: 11px; max-height: 300px;"><?php echo esc_html(json_encode(json_decode($log->context), JSON_PRETTY_PRINT)); ?></pre>
-                                    </details>
-                                <?php endif; ?>
-                            </td>
-                            <td style="white-space: nowrap;"><?php echo esc_html($log->memory_usage); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+            <tbody id="newbook-cache-logs-tbody">
+                <?php echo $this->render_logs_rows($logs); ?>
             </tbody>
         </table>
         <?php
@@ -690,7 +1029,46 @@ class NewBook_Cache_Admin_Settings {
         // Trigger full refresh in background
         do_action('newbook_cache_full_refresh');
 
-        wp_redirect(add_query_arg(array('page' => 'newbook-cache-settings', 'tab' => 'cache', 'message' => 'refresh_triggered'), admin_url('options-general.php')));
+        wp_redirect(add_query_arg(array('page' => 'newbook-cache-settings', 'tab' => 'status', 'message' => 'refresh_triggered'), admin_url('options-general.php')));
+        exit;
+    }
+
+    /**
+     * Handle incremental sync action
+     */
+    public function handle_incremental_sync() {
+        check_admin_referer('newbook_cache_incremental_sync');
+
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Unauthorized', 'newbook-api-cache'));
+        }
+
+        // Trigger incremental sync
+        do_action('newbook_cache_incremental_sync');
+
+        wp_redirect(add_query_arg(array('page' => 'newbook-cache-settings', 'tab' => 'status', 'message' => 'sync_triggered'), admin_url('options-general.php')));
+        exit;
+    }
+
+    /**
+     * Handle reschedule cron action
+     */
+    public function handle_reschedule_cron() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Unauthorized', 'newbook-api-cache'));
+        }
+
+        // Clear all existing cron jobs
+        wp_clear_scheduled_hook('newbook_cache_full_refresh');
+        wp_clear_scheduled_hook('newbook_cache_incremental_sync');
+        wp_clear_scheduled_hook('newbook_cache_cleanup');
+
+        // Reschedule them
+        newbook_cache_schedule_cron();
+
+        NewBook_Cache_Logger::log('Cron jobs manually rescheduled', NewBook_Cache_Logger::INFO);
+
+        wp_redirect(add_query_arg(array('page' => 'newbook-cache-settings', 'tab' => 'status', 'message' => 'cron_rescheduled'), admin_url('options-general.php')));
         exit;
     }
 
@@ -1249,5 +1627,72 @@ class NewBook_Cache_Admin_Settings {
                 'new_interval' => $new_value . ' seconds'
             ));
         }
+    }
+
+    /**
+     * Render logs table rows
+     *
+     * @param array $logs Array of log entries
+     * @return string HTML for table rows
+     */
+    private function render_logs_rows($logs) {
+        if (empty($logs)) {
+            return '<tr><td colspan="4">' . __('No logs found', 'newbook-api-cache') . '</td></tr>';
+        }
+
+        $html = '';
+        foreach ($logs as $log) {
+            $level_name = NewBook_Cache_Logger::get_level_name($log->level);
+            $html .= '<tr>';
+            $html .= '<td style="white-space: nowrap;">' . esc_html($log->timestamp) . '</td>';
+            $html .= '<td>';
+            $html .= '<span class="log-level log-level-' . esc_attr(strtolower($level_name)) . '">';
+            $html .= esc_html($level_name);
+            $html .= '</span>';
+            $html .= '</td>';
+            $html .= '<td>';
+            $html .= esc_html($log->message);
+
+            if (!empty($log->context)) {
+                $context_json = json_encode(json_decode($log->context), JSON_PRETTY_PRINT);
+                $html .= '<details style="margin-top: 5px;">';
+                $html .= '<summary style="cursor: pointer; font-size: 11px; color: #666;">' . __('Show Details', 'newbook-api-cache') . '</summary>';
+                $html .= '<pre style="margin-top: 5px; padding: 8px; background: #f9f9f9; overflow-x: auto; font-size: 11px; max-height: 300px;">' . esc_html($context_json) . '</pre>';
+                $html .= '</details>';
+            }
+
+            $html .= '</td>';
+            $html .= '<td style="white-space: nowrap;">' . esc_html($log->memory_usage) . '</td>';
+            $html .= '</tr>';
+        }
+
+        return $html;
+    }
+
+    /**
+     * AJAX handler for refreshing logs
+     */
+    public function ajax_refresh_logs() {
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'newbook_cache_refresh_logs')) {
+            wp_send_json_error(array('message' => 'Invalid nonce'));
+        }
+
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Unauthorized'));
+        }
+
+        // Get fresh logs
+        $logs = NewBook_Cache_Logger::get_logs(array('limit' => 50));
+        $log_count = NewBook_Cache_Logger::get_log_count();
+
+        // Render logs HTML
+        $html = $this->render_logs_rows($logs);
+
+        wp_send_json_success(array(
+            'html' => $html,
+            'count' => $log_count
+        ));
     }
 }
