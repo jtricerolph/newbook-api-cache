@@ -153,6 +153,9 @@ class NewBook_Cache_Admin_Settings {
                 <a href="?page=newbook-cache-settings&tab=status" class="nav-tab <?php echo $active_tab === 'status' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('Status & Diagnostics', 'newbook-api-cache'); ?>
                 </a>
+                <a href="?page=newbook-cache-settings&tab=summary" class="nav-tab <?php echo $active_tab === 'summary' ? 'nav-tab-active' : ''; ?>">
+                    <?php _e('Cache Summary', 'newbook-api-cache'); ?>
+                </a>
                 <a href="?page=newbook-cache-settings&tab=logs" class="nav-tab <?php echo $active_tab === 'logs' ? 'nav-tab-active' : ''; ?>">
                     <?php _e('Logging & Debug', 'newbook-api-cache'); ?>
                 </a>
@@ -174,6 +177,9 @@ class NewBook_Cache_Admin_Settings {
                     break;
                 case 'status':
                     $this->render_status_tab($stats);
+                    break;
+                case 'summary':
+                    $this->render_summary_tab();
                     break;
                 case 'logs':
                     $this->render_logs_tab();
@@ -934,6 +940,112 @@ class NewBook_Cache_Admin_Settings {
         } else {
             return sprintf(__('%d days', 'newbook-api-cache'), round($seconds / 86400));
         }
+    }
+
+    /**
+     * Render Cache Summary tab
+     */
+    private function render_summary_tab() {
+        global $newbook_api_cache;
+
+        // Get summary data
+        $summary_data = $newbook_api_cache->get_cache_summary_by_date();
+
+        // Calculate stats
+        $total_dates = count($summary_data);
+        $total_bookings = 0;
+        $earliest_date = null;
+        $latest_date = null;
+
+        foreach ($summary_data as $row) {
+            $total_bookings += $row->total_bookings;
+            if ($earliest_date === null || $row->cache_date < $earliest_date) {
+                $earliest_date = $row->cache_date;
+            }
+            if ($latest_date === null || $row->cache_date > $latest_date) {
+                $latest_date = $row->cache_date;
+            }
+        }
+
+        ?>
+        <h2><?php _e('Cache Summary by Date', 'newbook-api-cache'); ?></h2>
+        <p><?php _e('This table shows the number of bookings cached for each arrival date, along with the last cache update time.', 'newbook-api-cache'); ?></p>
+
+        <!-- Summary Stats -->
+        <div style="background: #f9f9f9; border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+            <h3 style="margin-top: 0;"><?php _e('Overview', 'newbook-api-cache'); ?></h3>
+            <p>
+                <strong><?php _e('Total Dates Covered:', 'newbook-api-cache'); ?></strong> <?php echo number_format($total_dates); ?><br>
+                <strong><?php _e('Total Bookings:', 'newbook-api-cache'); ?></strong> <?php echo number_format($total_bookings); ?><br>
+                <?php if ($earliest_date && $latest_date): ?>
+                    <strong><?php _e('Date Range:', 'newbook-api-cache'); ?></strong> <?php echo esc_html($earliest_date); ?> to <?php echo esc_html($latest_date); ?>
+                <?php endif; ?>
+            </p>
+        </div>
+
+        <!-- Data Table -->
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th><?php _e('Arrival Date', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Total Bookings', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Active Bookings', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Cancelled Bookings', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Last Cache Update', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Cache Age', 'newbook-api-cache'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($summary_data)): ?>
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px;">
+                            <?php _e('No cached data found. Run a full refresh to populate the cache.', 'newbook-api-cache'); ?>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($summary_data as $row): ?>
+                        <?php
+                        // Calculate cache age
+                        $last_update_time = strtotime($row->last_cache_update);
+                        $cache_age_seconds = time() - $last_update_time;
+                        $cache_age_text = $this->time_ago($row->last_cache_update);
+
+                        // Determine cache freshness color
+                        $freshness_color = '#46b450'; // Green (< 1 hour)
+                        $freshness_icon = '●';
+                        if ($cache_age_seconds > 86400) { // > 24 hours
+                            $freshness_color = '#d63638'; // Red
+                            $freshness_icon = '●';
+                        } elseif ($cache_age_seconds > 3600) { // > 1 hour
+                            $freshness_color = '#dba617'; // Yellow
+                            $freshness_icon = '●';
+                        }
+                        ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($row->cache_date); ?></strong></td>
+                            <td><?php echo number_format($row->total_bookings); ?></td>
+                            <td><?php echo number_format($row->active_count); ?></td>
+                            <td><?php echo number_format($row->cancelled_count); ?></td>
+                            <td><?php echo esc_html($row->last_cache_update); ?></td>
+                            <td>
+                                <span style="color: <?php echo $freshness_color; ?>;">
+                                    <?php echo $freshness_icon; ?>
+                                </span>
+                                <?php echo esc_html($cache_age_text); ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+
+        <p class="description" style="margin-top: 15px;">
+            <strong><?php _e('Cache Age Legend:', 'newbook-api-cache'); ?></strong><br>
+            <span style="color: #46b450;">●</span> <?php _e('Fresh (< 1 hour)', 'newbook-api-cache'); ?><br>
+            <span style="color: #dba617;">●</span> <?php _e('Moderate (1-24 hours)', 'newbook-api-cache'); ?><br>
+            <span style="color: #d63638;">●</span> <?php _e('Stale (> 24 hours)', 'newbook-api-cache'); ?>
+        </p>
+        <?php
     }
 
     /**

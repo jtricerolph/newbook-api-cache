@@ -636,4 +636,32 @@ class NewBook_API_Cache {
             'database_size_mb' => (float) $db_size
         );
     }
+
+    /**
+     * Get cache summary grouped by date
+     *
+     * @return array Array of date summaries with booking counts and last update times
+     */
+    public function get_cache_summary_by_date() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'newbook_cache';
+
+        // Get summary for each date in the cache
+        // We'll group by arrival_date to show coverage
+        $results = $wpdb->get_results("
+            SELECT
+                arrival_date as cache_date,
+                COUNT(*) as total_bookings,
+                MAX(last_updated) as last_cache_update,
+                SUM(CASE WHEN booking_status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
+                SUM(CASE WHEN booking_status NOT IN ('cancelled', 'no_show') THEN 1 ELSE 0 END) as active_count,
+                MIN(arrival_date) as earliest_arrival,
+                MAX(departure_date) as latest_departure
+            FROM {$table}
+            GROUP BY arrival_date
+            ORDER BY arrival_date DESC
+        ");
+
+        return $results;
+    }
 }
