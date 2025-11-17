@@ -156,7 +156,26 @@ class NewBook_API_Cache {
             );
         }
 
-        // Cache miss
+        // Cache miss - but check if we can infer "no bookings" from empty cache
+        // If the query date is within our retention window AND we've done at least one sync,
+        // then "no cached bookings" = "no bookings exist" (don't need to call API)
+        if ($this->is_date_in_retention($period_from, $period_to) && $this->has_synced_recently()) {
+            NewBook_Cache_Logger::log('bookings_list: Empty cache within retention window - returning empty result (no API call)', NewBook_Cache_Logger::INFO, array(
+                'period_from' => $period_from,
+                'period_to' => $period_to,
+                'list_type' => $list_type
+            ));
+
+            return array(
+                'data' => array(),
+                'success' => true,
+                'message' => '',
+                '_cache_hit' => true,
+                '_empty_date' => true
+            );
+        }
+
+        // True cache miss - need to call API
         NewBook_Cache_Logger::log('bookings_list: CACHE MISS - calling NewBook API', NewBook_Cache_Logger::INFO, array(
             'period_from' => $period_from,
             'period_to' => $period_to,
@@ -646,11 +665,29 @@ class NewBook_API_Cache {
     /**
      * Get cache summary grouped by date
      *
+     * @param int $year Optional year filter (e.g., 2025)
+     * @param int $month Optional month filter (1-12)
      * @return array Array of date summaries with booking counts and last update times
      */
-    public function get_cache_summary_by_date() {
+    public function get_cache_summary_by_date($year = null, $month = null) {
         global $wpdb;
         $table = $wpdb->prefix . 'newbook_cache';
+
+        // Build WHERE clause for filters
+        $where_clauses = array();
+
+        if ($year !== null) {
+            $where_clauses[] = $wpdb->prepare("YEAR(arrival_date) = %d", $year);
+        }
+
+        if ($month !== null) {
+            $where_clauses[] = $wpdb->prepare("MONTH(arrival_date) = %d", $month);
+        }
+
+        $where = '';
+        if (!empty($where_clauses)) {
+            $where = 'WHERE ' . implode(' AND ', $where_clauses);
+        }
 
         // Get summary for each date in the cache
         // We'll group by arrival_date to show coverage
@@ -664,10 +701,55 @@ class NewBook_API_Cache {
                 MIN(arrival_date) as earliest_arrival,
                 MAX(departure_date) as latest_departure
             FROM {$table}
+            {$where}
             GROUP BY arrival_date
             ORDER BY arrival_date DESC
         ");
 
         return $results;
+    }
+
+    /**
+     * Check if a date range is within our cache retention window
+     *
+     * @param string $from_date Start date (Y-m-d format)
+     * @param string $to_date End date (Y-m-d format)
+     * @return bool True if within retention window
+     */
+    private function is_date_in_retention($from_date, $to_date) {
+        $retention_past = get_option('newbook_cache_retention_past', 30);
+        $retention_future = get_option('newbook_cache_retention_future', 365);
+
+        $today = date('Y-m-d');
+        $retention_start = date('Y-m-d', strtotime("-{$retention_past} days"));
+        $retention_end = date('Y-m-d', strtotime("+{$retention_future} days"));
+
+        // Check if the query range overlaps with our retention window
+        return ($from_date <= $retention_end && $to_date >= $retention_start);
+    }
+
+    /**
+     * Check if cache has been synced recently (has at least one full refresh or recent incremental sync)
+     *
+     * @return bool True if we can trust empty cache results
+     */
+    private function has_synced_recently() {
+        // Check if we've done a full refresh
+        $last_full_refresh = get_option('newbook_cache_last_full_refresh');
+        if ($last_full_refresh && $last_full_refresh !== 'Never') {
+            return true;
+        }
+
+        // Check if we've done an incremental sync within the last hour
+        $last_incremental = get_option('newbook_cache_last_incremental_sync');
+        if ($last_incremental && $last_incremental !== 'Never') {
+            $last_sync_time = strtotime($last_incremental);
+            $one_hour_ago = strtotime('-1 hour');
+            if ($last_sync_time > $one_hour_ago) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

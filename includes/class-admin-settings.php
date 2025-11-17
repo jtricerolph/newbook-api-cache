@@ -946,10 +946,18 @@ class NewBook_Cache_Admin_Settings {
      * Render Cache Summary tab
      */
     private function render_summary_tab() {
-        global $newbook_api_cache;
+        global $newbook_api_cache, $wpdb;
 
-        // Get summary data
-        $summary_data = $newbook_api_cache->get_cache_summary_by_date();
+        // Get filter parameters
+        $filter_year = isset($_GET['filter_year']) && $_GET['filter_year'] !== '' ? intval($_GET['filter_year']) : null;
+        $filter_month = isset($_GET['filter_month']) && $_GET['filter_month'] !== '' ? intval($_GET['filter_month']) : null;
+
+        // Get available years from cache for filter dropdown
+        $table = $wpdb->prefix . 'newbook_cache';
+        $available_years = $wpdb->get_col("SELECT DISTINCT YEAR(arrival_date) FROM {$table} ORDER BY YEAR(arrival_date) DESC");
+
+        // Get summary data with filters
+        $summary_data = $newbook_api_cache->get_cache_summary_by_date($filter_year, $filter_month);
 
         // Calculate stats
         $total_dates = count($summary_data);
@@ -970,6 +978,44 @@ class NewBook_Cache_Admin_Settings {
         ?>
         <h2><?php _e('Cache Summary by Date', 'newbook-api-cache'); ?></h2>
         <p><?php _e('This table shows the number of bookings cached for each arrival date, along with the last cache update time.', 'newbook-api-cache'); ?></p>
+
+        <!-- Filter Form -->
+        <div style="background: #fff; border: 1px solid #ccd0d4; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+            <form method="get" action="">
+                <input type="hidden" name="page" value="newbook-cache-settings">
+                <input type="hidden" name="tab" value="summary">
+
+                <label for="filter_year"><?php _e('Year:', 'newbook-api-cache'); ?></label>
+                <select name="filter_year" id="filter_year">
+                    <option value=""><?php _e('All Years', 'newbook-api-cache'); ?></option>
+                    <?php foreach ($available_years as $year): ?>
+                        <option value="<?php echo esc_attr($year); ?>" <?php selected($filter_year, $year); ?>>
+                            <?php echo esc_html($year); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <label for="filter_month" style="margin-left: 15px;"><?php _e('Month:', 'newbook-api-cache'); ?></label>
+                <select name="filter_month" id="filter_month">
+                    <option value=""><?php _e('All Months', 'newbook-api-cache'); ?></option>
+                    <option value="1" <?php selected($filter_month, 1); ?>><?php _e('January', 'newbook-api-cache'); ?></option>
+                    <option value="2" <?php selected($filter_month, 2); ?>><?php _e('February', 'newbook-api-cache'); ?></option>
+                    <option value="3" <?php selected($filter_month, 3); ?>><?php _e('March', 'newbook-api-cache'); ?></option>
+                    <option value="4" <?php selected($filter_month, 4); ?>><?php _e('April', 'newbook-api-cache'); ?></option>
+                    <option value="5" <?php selected($filter_month, 5); ?>><?php _e('May', 'newbook-api-cache'); ?></option>
+                    <option value="6" <?php selected($filter_month, 6); ?>><?php _e('June', 'newbook-api-cache'); ?></option>
+                    <option value="7" <?php selected($filter_month, 7); ?>><?php _e('July', 'newbook-api-cache'); ?></option>
+                    <option value="8" <?php selected($filter_month, 8); ?>><?php _e('August', 'newbook-api-cache'); ?></option>
+                    <option value="9" <?php selected($filter_month, 9); ?>><?php _e('September', 'newbook-api-cache'); ?></option>
+                    <option value="10" <?php selected($filter_month, 10); ?>><?php _e('October', 'newbook-api-cache'); ?></option>
+                    <option value="11" <?php selected($filter_month, 11); ?>><?php _e('November', 'newbook-api-cache'); ?></option>
+                    <option value="12" <?php selected($filter_month, 12); ?>><?php _e('December', 'newbook-api-cache'); ?></option>
+                </select>
+
+                <button type="submit" class="button" style="margin-left: 10px;"><?php _e('Filter', 'newbook-api-cache'); ?></button>
+                <a href="?page=newbook-cache-settings&tab=summary" class="button" style="margin-left: 5px;"><?php _e('Reset', 'newbook-api-cache'); ?></a>
+            </form>
+        </div>
 
         <!-- Summary Stats -->
         <div style="background: #f9f9f9; border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
