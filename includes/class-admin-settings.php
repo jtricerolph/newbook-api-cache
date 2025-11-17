@@ -31,6 +31,7 @@ class NewBook_Cache_Admin_Settings {
 
         // AJAX handlers
         add_action('wp_ajax_newbook_cache_refresh_logs', array($this, 'ajax_refresh_logs'));
+        add_action('wp_ajax_newbook_cache_get_booking_details', array($this, 'ajax_get_booking_details'));
 
         // Reschedule cron when sync interval changes
         add_action('update_option_newbook_cache_sync_interval', array($this, 'reschedule_sync_on_interval_change'), 10, 2);
@@ -124,6 +125,101 @@ class NewBook_Cache_Admin_Settings {
                         button.prop('disabled', false).text(originalText);
                     }
                 });
+            });
+
+            // Handle booking details modal
+            $('.newbook-view-details').on('click', function(e) {
+                e.preventDefault();
+                var button = $(this);
+                var date = button.data('date');
+                var originalText = button.text();
+
+                // Disable button and show loading state
+                button.prop('disabled', true).text('Loading...');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'newbook_cache_get_booking_details',
+                        nonce: '" . wp_create_nonce('newbook_cache_booking_details') . "',
+                        date: date
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Build modal content
+                            var modalContent = '<h2>Booking Details for ' + response.data.date + '</h2>';
+                            modalContent += '<p><strong>Total Bookings:</strong> ' + response.data.count + '</p>';
+
+                            if (response.data.count > 0) {
+                                modalContent += '<div style=\"max-height: 500px; overflow-y: auto;\">';
+                                modalContent += '<table class=\"wp-list-table widefat fixed striped\" style=\"margin-top: 15px;\">';
+                                modalContent += '<thead><tr>';
+                                modalContent += '<th>Booking ID</th>';
+                                modalContent += '<th>Status</th>';
+                                modalContent += '<th>Placed Date</th>';
+                                modalContent += '<th>Cancelled Date</th>';
+                                modalContent += '<th>Arrival</th>';
+                                modalContent += '<th>Departure</th>';
+                                modalContent += '<th>Room</th>';
+                                modalContent += '<th>Guests</th>';
+                                modalContent += '<th>Last Updated</th>';
+                                modalContent += '</tr></thead><tbody>';
+
+                                $.each(response.data.bookings, function(index, booking) {
+                                    modalContent += '<tr>';
+                                    modalContent += '<td>' + booking.booking_id + '</td>';
+                                    modalContent += '<td>' + (booking.booking_status || '-') + '</td>';
+
+                                    // Highlight NULL placed dates in red
+                                    if (!booking.booking_placed_date || booking.booking_placed_date === null) {
+                                        modalContent += '<td style=\"background-color: #ffcccc; font-weight: bold;\">NULL</td>';
+                                    } else {
+                                        modalContent += '<td>' + booking.booking_placed_date + '</td>';
+                                    }
+
+                                    // Cancelled date
+                                    if (!booking.booking_cancelled_date || booking.booking_cancelled_date === null) {
+                                        modalContent += '<td style=\"color: #999;\">-</td>';
+                                    } else {
+                                        modalContent += '<td>' + booking.booking_cancelled_date + '</td>';
+                                    }
+
+                                    modalContent += '<td>' + (booking.arrival_date || '-') + '</td>';
+                                    modalContent += '<td>' + (booking.departure_date || '-') + '</td>';
+                                    modalContent += '<td>' + (booking.room_name || '-') + '</td>';
+                                    modalContent += '<td>' + (booking.num_guests || '-') + '</td>';
+                                    modalContent += '<td>' + (booking.last_updated || '-') + '</td>';
+                                    modalContent += '</tr>';
+                                });
+
+                                modalContent += '</tbody></table></div>';
+                            } else {
+                                modalContent += '<p>No bookings found for this date.</p>';
+                            }
+
+                            // Show modal
+                            $('#newbook-booking-details-content').html(modalContent);
+                            $('#newbook-booking-details-modal').fadeIn();
+                        } else {
+                            alert('Failed to load booking details: ' + (response.data.message || 'Unknown error'));
+                        }
+                    },
+                    error: function() {
+                        alert('Failed to load booking details. Please try again.');
+                    },
+                    complete: function() {
+                        // Re-enable button and restore text
+                        button.prop('disabled', false).text(originalText);
+                    }
+                });
+            });
+
+            // Close modal when clicking close button or overlay
+            $('#newbook-booking-details-close, #newbook-booking-details-modal').on('click', function(e) {
+                if (e.target === this) {
+                    $('#newbook-booking-details-modal').fadeOut();
+                }
             });
         });
         ";
@@ -1061,12 +1157,13 @@ class NewBook_Cache_Admin_Settings {
                     <th><?php _e('Cancelled Bookings', 'newbook-api-cache'); ?></th>
                     <th><?php _e('Last Cache Update', 'newbook-api-cache'); ?></th>
                     <th><?php _e('Cache Age', 'newbook-api-cache'); ?></th>
+                    <th><?php _e('Actions', 'newbook-api-cache'); ?></th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($summary_data)): ?>
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 20px;">
+                        <td colspan="7" style="text-align: center; padding: 20px;">
                             <?php _e('No cached data found. Run a full refresh to populate the cache.', 'newbook-api-cache'); ?>
                         </td>
                     </tr>
@@ -1101,6 +1198,11 @@ class NewBook_Cache_Admin_Settings {
                                 </span>
                                 <?php echo esc_html($cache_age_text); ?>
                             </td>
+                            <td>
+                                <button type="button" class="button button-secondary newbook-view-details" data-date="<?php echo esc_attr($row->cache_date); ?>">
+                                    <?php _e('View Details', 'newbook-api-cache'); ?>
+                                </button>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -1113,6 +1215,33 @@ class NewBook_Cache_Admin_Settings {
             <span style="color: #dba617;">●</span> <?php _e('Moderate (1-24 hours)', 'newbook-api-cache'); ?><br>
             <span style="color: #d63638;">●</span> <?php _e('Stale (> 24 hours)', 'newbook-api-cache'); ?>
         </p>
+
+        <!-- Booking Details Modal -->
+        <div id="newbook-booking-details-modal" style="display: none; position: fixed; z-index: 100000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);">
+            <div style="background-color: #fefefe; margin: 5% auto; padding: 0; border: 1px solid #888; width: 90%; max-width: 1200px; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+                <div style="padding: 20px; border-bottom: 1px solid #ddd; position: relative;">
+                    <button id="newbook-booking-details-close" type="button" style="position: absolute; right: 20px; top: 20px; background: none; border: none; font-size: 28px; font-weight: bold; color: #aaa; cursor: pointer; line-height: 20px;">&times;</button>
+                    <div id="newbook-booking-details-content">
+                        <!-- Content will be loaded here via AJAX -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <style>
+            #newbook-booking-details-modal table {
+                font-size: 12px;
+            }
+            #newbook-booking-details-modal table th,
+            #newbook-booking-details-modal table td {
+                padding: 8px;
+                white-space: nowrap;
+            }
+            #newbook-booking-details-close:hover,
+            #newbook-booking-details-close:focus {
+                color: #000;
+            }
+        </style>
         <?php
     }
 
@@ -2057,6 +2186,63 @@ class NewBook_Cache_Admin_Settings {
         wp_send_json_success(array(
             'html' => $html,
             'count' => $log_count
+        ));
+    }
+
+    /**
+     * AJAX handler for getting booking details for a specific date
+     */
+    public function ajax_get_booking_details() {
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'newbook_cache_booking_details')) {
+            wp_send_json_error(array('message' => 'Invalid nonce'));
+        }
+
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Unauthorized'));
+        }
+
+        // Get date parameter
+        $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';
+        if (empty($date)) {
+            wp_send_json_error(array('message' => 'Date parameter required'));
+        }
+
+        // Validate date format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            wp_send_json_error(array('message' => 'Invalid date format'));
+        }
+
+        // Get booking details from database
+        global $wpdb;
+        $table = $wpdb->prefix . 'newbook_cache';
+
+        $bookings = $wpdb->get_results($wpdb->prepare(
+            "SELECT
+                booking_id,
+                booking_status,
+                booking_placed_date,
+                booking_cancelled_date,
+                arrival_date,
+                departure_date,
+                last_updated,
+                room_name,
+                num_guests
+            FROM {$table}
+            WHERE arrival_date = %s
+            ORDER BY booking_placed_date DESC, booking_id DESC",
+            $date
+        ), ARRAY_A);
+
+        if ($wpdb->last_error) {
+            wp_send_json_error(array('message' => 'Database error: ' . $wpdb->last_error));
+        }
+
+        wp_send_json_success(array(
+            'bookings' => $bookings,
+            'date' => $date,
+            'count' => count($bookings)
         ));
     }
 }
