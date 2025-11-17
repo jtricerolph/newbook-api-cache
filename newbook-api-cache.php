@@ -50,6 +50,12 @@ function newbook_cache_activate() {
     if (get_option('newbook_cache_enabled') === false) {
         update_option('newbook_cache_enabled', true);
     }
+    if (get_option('newbook_cache_enable_incremental_sync') === false) {
+        update_option('newbook_cache_enable_incremental_sync', true);
+    }
+    if (get_option('newbook_cache_enable_daily_refresh') === false) {
+        update_option('newbook_cache_enable_daily_refresh', true);
+    }
     if (get_option('newbook_cache_sync_interval') === false) {
         update_option('newbook_cache_sync_interval', 20);
     }

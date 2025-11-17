@@ -56,6 +56,8 @@ class NewBook_Cache_Admin_Settings {
 
         // Cache Settings (separate group)
         register_setting('newbook_cache_cache_settings', 'newbook_cache_enabled', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_enable_incremental_sync', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
+        register_setting('newbook_cache_cache_settings', 'newbook_cache_enable_daily_refresh', array('sanitize_callback' => 'rest_sanitize_boolean', 'default' => true));
         register_setting('newbook_cache_cache_settings', 'newbook_cache_sync_interval', array('sanitize_callback' => 'absint', 'default' => 20));
         register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_future', array('sanitize_callback' => 'absint', 'default' => 365));
         register_setting('newbook_cache_cache_settings', 'newbook_cache_retention_past', array('sanitize_callback' => 'absint', 'default' => 30));
@@ -312,6 +314,8 @@ class NewBook_Cache_Admin_Settings {
      */
     private function render_cache_tab($stats) {
         $enabled = get_option('newbook_cache_enabled', true);
+        $enable_incremental_sync = get_option('newbook_cache_enable_incremental_sync', true);
+        $enable_daily_refresh = get_option('newbook_cache_enable_daily_refresh', true);
         $sync_interval = get_option('newbook_cache_sync_interval', 20);
         $allow_unknown_relay = get_option('newbook_cache_allow_unknown_relay', false);
         $retention_future = get_option('newbook_cache_retention_future', 365);
@@ -333,6 +337,32 @@ class NewBook_Cache_Admin_Settings {
                             <input type="checkbox" name="newbook_cache_enabled" value="1" <?php checked($enabled, true); ?> />
                             <?php _e('Enable NewBook API caching', 'newbook-api-cache'); ?>
                         </label>
+                        <p class="description">
+                            <?php _e('Master switch - when disabled, all caching and sync operations are stopped.', 'newbook-api-cache'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Automated Sync', 'newbook-api-cache'); ?></th>
+                    <td>
+                        <p>
+                            <label>
+                                <input type="checkbox" name="newbook_cache_enable_incremental_sync" value="1" <?php checked($enable_incremental_sync, true); ?> />
+                                <?php _e('Enable Incremental Sync', 'newbook-api-cache'); ?>
+                            </label>
+                        </p>
+                        <p class="description" style="margin-left: 25px;">
+                            <?php _e('Automatically check for booking changes every few seconds.', 'newbook-api-cache'); ?>
+                        </p>
+                        <p style="margin-top: 10px;">
+                            <label>
+                                <input type="checkbox" name="newbook_cache_enable_daily_refresh" value="1" <?php checked($enable_daily_refresh, true); ?> />
+                                <?php _e('Enable Daily Full Refresh', 'newbook-api-cache'); ?>
+                            </label>
+                        </p>
+                        <p class="description" style="margin-left: 25px;">
+                            <?php _e('Perform complete cache rebuild daily at 3 AM.', 'newbook-api-cache'); ?>
+                        </p>
                     </td>
                 </tr>
                 <tr>

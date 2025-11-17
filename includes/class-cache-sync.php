@@ -34,6 +34,24 @@ class NewBook_Cache_Sync {
      * Full cache refresh (runs daily at 3 AM)
      */
     public function full_refresh() {
+        // Check if caching is enabled
+        if (!get_option('newbook_cache_enabled', true)) {
+            NewBook_Cache_Logger::log('Full refresh skipped: Caching is disabled', NewBook_Cache_Logger::DEBUG);
+            return;
+        }
+
+        // Check if daily refresh is enabled
+        if (!get_option('newbook_cache_enable_daily_refresh', true)) {
+            NewBook_Cache_Logger::log('Full refresh skipped: Daily refresh is disabled', NewBook_Cache_Logger::DEBUG);
+            return;
+        }
+
+        // Check if credentials are configured
+        if (!$this->has_credentials()) {
+            NewBook_Cache_Logger::log('Full refresh skipped: NewBook API credentials not configured', NewBook_Cache_Logger::WARNING);
+            return;
+        }
+
         NewBook_Cache_Logger::log('=== Full Refresh Started ===', NewBook_Cache_Logger::INFO);
         $start_time = microtime(true);
 
@@ -128,6 +146,27 @@ class NewBook_Cache_Sync {
      * Incremental sync (runs every 20 seconds)
      */
     public function incremental_sync() {
+        // Check if caching is enabled
+        if (!get_option('newbook_cache_enabled', true)) {
+            return; // Silent skip - no log spam
+        }
+
+        // Check if incremental sync is enabled
+        if (!get_option('newbook_cache_enable_incremental_sync', true)) {
+            return; // Silent skip
+        }
+
+        // Check if credentials are configured
+        if (!$this->has_credentials()) {
+            // Only log this once per hour to avoid spam
+            $last_warning = get_transient('newbook_cache_creds_warning');
+            if (!$last_warning) {
+                NewBook_Cache_Logger::log('Incremental sync skipped: NewBook API credentials not configured', NewBook_Cache_Logger::WARNING);
+                set_transient('newbook_cache_creds_warning', true, 3600); // 1 hour
+            }
+            return;
+        }
+
         $last_sync = get_option('newbook_cache_last_incremental_sync', date('Y-m-d H:i:s', strtotime('-1 minute')));
 
         NewBook_Cache_Logger::log("Incremental sync check (since {$last_sync})", NewBook_Cache_Logger::DEBUG);
@@ -228,5 +267,18 @@ class NewBook_Cache_Sync {
     public function trigger_cleanup() {
         NewBook_Cache_Logger::log('Manual cleanup triggered', NewBook_Cache_Logger::INFO);
         $this->cleanup();
+    }
+
+    /**
+     * Check if API credentials are configured
+     *
+     * @return bool True if credentials exist
+     */
+    private function has_credentials() {
+        $username = get_option('newbook_cache_username');
+        $password = get_option('newbook_cache_password');
+        $api_key = get_option('newbook_cache_api_key');
+
+        return !empty($username) && !empty($password) && !empty($api_key);
     }
 }
