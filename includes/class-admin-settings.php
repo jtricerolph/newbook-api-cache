@@ -515,15 +515,15 @@ class NewBook_Cache_Admin_Settings {
             </tr>
             <tr>
                 <td><strong><?php _e('Active Bookings:', 'newbook-api-cache'); ?></strong></td>
-                <td><?php echo number_format($stats['hot_bookings'] ?? 0); ?></td>
+                <td><?php echo number_format($stats['active_bookings'] ?? 0); ?></td>
             </tr>
             <tr>
-                <td><strong><?php _e('Historical Bookings:', 'newbook-api-cache'); ?></strong></td>
-                <td><?php echo number_format($stats['historical_bookings'] ?? 0); ?></td>
+                <td><strong><?php _e('Checked Out:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo number_format($stats['checked_out'] ?? 0); ?></td>
             </tr>
             <tr>
-                <td><strong><?php _e('Cancelled Bookings:', 'newbook-api-cache'); ?></strong></td>
-                <td><?php echo number_format($stats['cancelled_bookings'] ?? 0); ?></td>
+                <td><strong><?php _e('Cancelled:', 'newbook-api-cache'); ?></strong></td>
+                <td><?php echo number_format($stats['cancelled'] ?? 0); ?></td>
             </tr>
             <tr>
                 <td><strong><?php _e('Database Size:', 'newbook-api-cache'); ?></strong></td>
